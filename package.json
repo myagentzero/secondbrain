@@ -1,0 +1,29 @@
+{
+  "name": "secondbrain",
+  "version": "2.0.0",
+  "description": "Second Brain: Calendar sync + AI-powered capture system",
+  "main": "index.js",
+  "scripts": {
+    "brain": "node src/index.js",
+    "daily": "node src/digests/daily.js",
+    "weekly": "node src/digests/weekly.js",
+    "maintenance": "node src/digests/maintenance.js",
+    "sync": "node src/calendar/sync.js"
+  },
+  "author": "myagentzero",
+  "license": "ISC",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/myagentzero/secondbrain.git"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.80.0",
+    "@notionhq/client": "^5.15.0",
+    "@slack/bolt": "^4.6.0",
+    "googleapis": "^171.4.0",
+    "ical-expander": "^3.2.0",
+    "node-cron": "^4.2.1",
+    "node-fetch": "^3.3.2",
+    "openai": "^6.33.0"
+  }
+}
