@@ -20,8 +20,15 @@ const moveWeekendToMonday = (date) => {
 const formatDateForNotion = (value) => {
   if (!value) return null;
 
+  // Guard: treat past dates as null so callers fall back to their default
+  const isPast = (date) => {
+    const today = new Date(getMSTDate().split('T')[0] + 'T00:00:00');
+    return date < today;
+  };
+
   if (value instanceof Date && !Number.isNaN(value.getTime())) {
-    return moveWeekendToMonday(value);
+    const adjusted = moveWeekendToMonday(value);
+    return isPast(adjusted) ? null : adjusted;
   }
 
   if (typeof value === 'string') {
@@ -32,14 +39,16 @@ const formatDateForNotion = (value) => {
     if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
       const parsedDateOnly = new Date(`${trimmed}T00:00:00`);
       if (!Number.isNaN(parsedDateOnly.getTime())) {
-        return moveWeekendToMonday(parsedDateOnly);
+        const adjusted = moveWeekendToMonday(parsedDateOnly);
+        return isPast(adjusted) ? null : adjusted;
       }
       return null;
     }
 
     const parsed = new Date(trimmed);
     if (!Number.isNaN(parsed.getTime())) {
-      return moveWeekendToMonday(parsed);
+      const adjusted = moveWeekendToMonday(parsed);
+      return isPast(adjusted) ? null : adjusted;
     }
   }
 
@@ -190,7 +199,7 @@ const createAdminEntry = async ({ name, notes, status, dueDate }) => {
     properties['Notes'] = { rich_text: [{ text: { content: notes } }] };
   }
   const effectiveDueDate = formatDateForNotion(dueDate) || getDefaultAdminDueDate();
-  properties['Due Date'] = { date: { start: effectiveDueDate.toISOString().split('T')[0]} };
+  properties['Due Date'] = { date: { start: effectiveDueDate.toISOString().split('T')[0] } };
 
   return notion.pages.create({
     parent: { database_id: admin },
@@ -439,3 +448,4 @@ module.exports = {
   queryAllOpenProjects,
   queryOpenInboxLog
 };
+

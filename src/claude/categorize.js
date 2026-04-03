@@ -67,7 +67,7 @@ For ADMIN:
   "data": {
     "name": "Task name",
     "status": "Active",
-    "due_date": "2026-01-15 or null if not specified",
+    "due_date": "YYYY-MM-DD",
     "notes": "Additional context and details to follow up on"
   }
 }
@@ -87,12 +87,14 @@ RULES:
 - "next_action" must be specific and executable. "Work on website" is bad. "Email Sarah to confirm deadline" is good.
 - If a person's name is mentioned, consider if this is really about that person or about a project/task involving them
 - Status options for projects: "Active", "Waiting", "Blocked"
-- Extract dates when mentioned and format as YYYY-MM-DD
+- Today's date is {{TODAY}}. Use this to resolve relative dates like "tomorrow", "next week", "Friday", etc.
+- Extract dates when mentioned and format as YYYY-MM-DD. Due date should be a date in the future, otherwise set to null
 - If no clear tags apply, use an empty array []
 - Always return valid JSON with no markdown formatting`;
 
 const categorizeMessage = async (text) => {
-  const prompt = CATEGORIZATION_PROMPT.replace('{{INPUT}}', text);
+  const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Phoenix' });
+  const prompt = CATEGORIZATION_PROMPT.replace('{{INPUT}}', text).replace('{{TODAY}}', today);
 
   const response = await createMessage({
     model: getModel(),
@@ -235,7 +237,7 @@ RULES:
 - "Work on website" is bad. "Email Sarah to confirm deadline" is a good task
 - Prioritize TASKS DUE and ACTIVE PROJECTS based on concrete actions for newTasks
 - Keep notes brief (under 150 characters)
-- There can be fewer than 3 newTasks, that's fine 
+- There can be fewer than 3 newTasks, that's fine
 - Do not suggest newTasks that duplicate what is already captured in existing or completed tasks
 - If no newTasks, use empty array []
 - If no peopleToConnect, use empty array []
@@ -458,3 +460,4 @@ module.exports = {
   generateWeeklyDigest,
   matchCompletedTasksToInbox
 };
+
