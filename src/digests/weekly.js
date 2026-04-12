@@ -6,6 +6,21 @@ const { generateWeeklyDigest } = require('../claude/categorize');
 const { getApp } = require('../slack/client');
 const { getSlackConfig } = require('../config');
 const { deleteOldCompletedTasks, listCompletedTasks } = require('../tasks/tasks');
+const { spawn } = require('child_process');
+
+// Store content in Zeroclaw memory
+const memoryStore = (key, content, category) => {
+  return new Promise((resolve, reject) => {
+    const proc = spawn('zeroclaw', ['memory', 'store', key, content, '--category', category]);
+    let stderr = '';
+    proc.stderr.on('data', (data) => { stderr += data.toString(); });
+    proc.on('close', (code) => {
+      if (code === 0) resolve();
+      else reject(new Error(`zeroclaw exited with code ${code}: ${stderr}`));
+    });
+    proc.on('error', (err) => reject(err));
+  });
+};
 
 // Build context string from Notion data
 const buildWeeklyContext = (inboxLog, projects) => {
@@ -85,6 +100,15 @@ const runWeeklyDigest = async () => {
       icon_emoji: ':date:'
     });
     console.log('Posted to Slack');
+
+    // Store digest in Zeroclaw memory
+    try {
+      const today = new Date().toISOString().split('T')[0].replace(/-/g, '_');
+      await memoryStore(`secondbrain_weekly_digest_${today}`, digest, 'daily');
+      console.log('Stored digest in Zeroclaw memory');
+    } catch (memError) {
+      console.error('Failed to store in Zeroclaw memory:', memError.message);
+    }
 
     // Clean up completed Google Tasks older than 7 days
     const deletedCount = await deleteOldCompletedTasks(7);
