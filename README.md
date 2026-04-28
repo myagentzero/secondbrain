@@ -71,17 +71,19 @@ A self-hosted productivity system that captures thoughts from Slack, categorizes
 # Install dependencies
 npm install
 
-# Run Second Brain capture service
+# Run Second Brain service (Slack bot + scheduler)
 npm run brain
 
-# Run calendar sync (specify days ahead to sync)
+# Run calendar sync manually (max 4 days)
 npm run sync -- 1    # sync 1 day ahead
-npm run sync -- 4    # sync 4 days (weekend coverage)
-npm run sync -- 7    # sync a full week
+npm run sync -- 4    # sync 4 days (weekend coverage, maximum allowed)
 
 # Run digests manually for testing
 npm run daily
 npm run weekly
+
+# Run maintenance tasks manually
+npm run maintenance
 ```
 
 ## Systemd Service (Raspberry Pi)
@@ -134,15 +136,15 @@ For clearer classification, use prefixes:
 
 ```
 src/
-├── index.js              # Entry point
-├── config.js             # Load credentials
-├── scheduler.js          # node-cron for scheduled tasks
+├── index.js              # Main entry point (starts Slack bot + scheduler)
+├── config.js             # Load credentials from credentials.json
+├── scheduler.js          # node-cron for scheduled tasks (America/Phoenix tz)
 ├── slack/
-│   ├── client.js         # Slack Bolt setup (socket mode)
+│   ├── client.js         # Slack Bolt setup (Socket Mode)
 │   └── handlers.js       # Message handlers (capture, fix, update)
 ├── notion/
-│   ├── client.js         # Notion client
-│   └── databases.js      # CRUD for all 5 databases
+│   ├── client.js         # Notion API client
+│   └── databases.js      # CRUD for all 5 databases + Inbox Log
 ├── llm/
 │   └── client.js         # LLM abstraction (LiteLLM with Anthropic fallback)
 ├── claude/
@@ -154,8 +156,9 @@ src/
 ├── tasks/
 │   └── tasks.js          # Google Tasks CRUD + cleanup
 └── digests/
-    ├── daily.js          # Daily digest logic
-    └── weekly.js         # Weekly digest logic
+    ├── daily.js          # Daily digest (5am, Mon-Fri)
+    ├── weekly.js         # Weekly digest (Sunday 5pm)
+    └── maintenance.js    # Cleanup tasks (4:30am daily)
 ```
 
 ## Google Tasks Integration
@@ -221,13 +224,36 @@ The digest system integrates with Google Tasks to provide better context:
 
 ## Calendar Sync
 
-Copy events from an Outlook or Google shared calendar to your primary Google Calendar. Managed by the scheduler with the following schedule:
+Copy events from an Outlook or Google shared calendar to your primary Google Calendar. Managed by the scheduler with the following schedule (all times in America/Phoenix timezone):
 
 - **Weekdays 7am-3pm** (hourly): sync 1 day ahead
 - **Mon-Thu 4pm**: sync 2 days ahead
 - **Friday 4pm**: sync 4 days ahead (covers the weekend)
 
+Features:
+- Fetches events from shared Google calendars and Outlook ICS feeds
+- Deduplicates by event title and start time
+- Marks canceled events with "Canceled: " prefix (not deleted)
+- Color codes synced events (COLOR_ID = 8)
+- Rate limited to 1500ms between API calls
+- Timezone-aware (converts Windows to IANA format)
+
 ```bash
-# Manual sync (e.g., next 7 days)
-npm run sync -- 7
+# Manual sync (maximum 4 days)
+npm run sync -- 4
 ```
+
+Note: Manual sync is limited to a maximum of 4 days. Values above 4 will be automatically capped.
+
+## Scheduler
+
+All scheduled tasks run in America/Phoenix timezone:
+
+| Time | Frequency | Task | Details |
+|------|-----------|------|---------|
+| 4:30 AM | Every day | Maintenance | Clean up old completed tasks |
+| 5:00 AM | Mon-Fri | Daily digest | Generate top 3 actions, show incomplete tasks |
+| 5:00 PM | Sunday | Weekly digest | Weekly review, task cleanup |
+| 7am-3pm | Weekdays | Calendar sync | Sync 1 day ahead (hourly) |
+| 4:00 PM | Mon-Thu | Calendar sync | Sync 2 days ahead |
+| 4:00 PM | Friday | Calendar sync | Sync 4 days ahead (weekend coverage) |

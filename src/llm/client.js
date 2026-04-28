@@ -6,6 +6,8 @@ let primaryClient = null;
 let secondaryClient = null;
 let config = null;
 
+const USER_AGENT = 'claude-code/2.1.119; +https://support.anthropic.com/';
+
 const FALLBACK_ERRORS = [
   'ECONNREFUSED',
   'ENOTFOUND',
@@ -45,7 +47,8 @@ const getPrimaryClient = () => {
   if (cfg.primary.type === 'openai-compatible') {
     primaryClient = new OpenAI({
       baseURL: cfg.primary.baseUrl,
-      apiKey: cfg.primary.apiKey
+      apiKey: cfg.primary.apiKey,
+      defaultHeaders: { 'User-Agent': USER_AGENT }
     });
   }
 
@@ -59,7 +62,10 @@ const getSecondaryClient = () => {
   if (!cfg.secondary) return null;
 
   if (cfg.secondary.type === 'anthropic') {
-    secondaryClient = new Anthropic({ apiKey: cfg.secondary.apiKey });
+    secondaryClient = new Anthropic({
+      apiKey: cfg.secondary.apiKey,
+      defaultHeaders: { 'User-Agent': USER_AGENT }
+    });
   }
 
   return secondaryClient;
@@ -71,7 +77,8 @@ const checkPrimaryHealth = async (baseUrl, timeout = 30000) => {
 
   try {
     const response = await fetch(`${baseUrl}/health/liveliness`, {
-      signal: controller.signal
+      signal: controller.signal,
+      headers: { 'User-Agent': USER_AGENT }
     });
     clearTimeout(timeoutId);
     return response.ok;
@@ -207,7 +214,7 @@ const checkKeyExpiration = async () => {
 
   try {
     const response = await fetch(`${cfg.primary.baseUrl}/key/info`, {
-      headers: { 'Authorization': `Bearer ${cfg.primary.apiKey}` }
+      headers: { 'Authorization': `Bearer ${cfg.primary.apiKey}`, 'User-Agent': USER_AGENT }
     });
     if (!response.ok) return null;
     const data = await response.json();

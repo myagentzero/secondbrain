@@ -178,17 +178,26 @@ const runCalendarSync = async (syncDays) => {
 // Standalone execution
 if (require.main === module) {
   const syncDays = process.argv[2] ? parseInt(process.argv[2]) : null;
+  const MAX_SYNC_DAYS = 4;
 
   if (!syncDays || isNaN(syncDays)) {
     console.log('Usage: node src/calendar/sync.js <syncDays>');
-    console.log('Example: node src/calendar/sync.js 7');
+    console.log('Example: node src/calendar/sync.js 4');
     process.exit(1);
   }
 
-  runCalendarSync(syncDays).catch(err => {
-    console.error('Calendar sync failed:', err);
-    process.exit(1);
-  });
+  if (syncDays > MAX_SYNC_DAYS) {
+    console.log(`Maximum sync days is ${MAX_SYNC_DAYS}. Limiting to ${MAX_SYNC_DAYS} days.`);
+    runCalendarSync(MAX_SYNC_DAYS).catch(err => {
+      console.error('Calendar sync failed:', err);
+      process.exit(1);
+    });
+  } else {
+    runCalendarSync(syncDays).catch(err => {
+      console.error('Calendar sync failed:', err);
+      process.exit(1);
+    });
+  }
 }
 
 module.exports = { runCalendarSync };
