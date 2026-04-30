@@ -24,6 +24,8 @@ const statuses = {
   'Done': ['done', 'finish', 'finished', 'complete', 'completed', 'closed'],
 };
 
+const allStatusKeywords = new Set(Object.values(statuses).flat());
+
 // Parse fix/update commands
 const parseCorrection = (message) => {
   const fixMatch = message.match(/(fix|update):\s*(.+)/i);
@@ -38,28 +40,13 @@ const parseCorrection = (message) => {
     'admin': ['admin', 'task', 'errand']
   };
 
-  let newDestination = null;
-  let newStatus = null;
+  const newDestination = Object.entries(destinations).find(([, kws]) =>
+    kws.some(kw => correction.includes(kw))
+  )?.[0] ?? null;
 
-  for (const [dest, keywords] of Object.entries(destinations)) {
-    for (const keyword of keywords) {
-      if (correction.includes(keyword)) {
-        newDestination = dest;
-        break;
-      }
-    }
-    if (newDestination) break;
-  }
-
-  for (const [stat, keywords] of Object.entries(statuses)) {
-    for (const keyword of keywords) {
-      if (correction.includes(keyword)) {
-        newStatus = stat;
-        break;
-      }
-    }
-    if (newStatus) break;
-  }
+  const newStatus = Object.entries(statuses).find(([, kws]) =>
+    kws.some(kw => correction.includes(kw))
+  )?.[0] ?? null;
 
   return { newDestination, newStatus, correction };
 };
@@ -112,16 +99,16 @@ const setupHandlers = () => {
 
     // Skip thread replies that are fix/update commands (handled separately)
     const text = message.text || '';
-    if (text.toLowerCase().startsWith('fix:') || text.toLowerCase().startsWith('update:')) {
+    const lowerText = text.toLowerCase();
+    if (lowerText.startsWith('fix:') || lowerText.startsWith('update:')) {
       // Handle fix/update command
       await handleCorrection(message, say);
       return;
     }
 
     // Handle status keyword shortcuts (e.g., "done", "active", "waiting")
-    const normalizedText = text.toLowerCase().trim();
-    const allStatusKeywords = Object.values(statuses).flat();
-    if (allStatusKeywords.includes(normalizedText)) {
+    const normalizedText = lowerText.trim();
+    if (allStatusKeywords.has(normalizedText)) {
       await handleCorrection({ ...message, text: `update: ${normalizedText}` }, say);
       return;
     }
@@ -179,7 +166,6 @@ const setupHandlers = () => {
       if (result.status) {
         replyText += `\nStatus: ${result.status}`;
       }
-      replyText += `\n\nReply "fix: [your correction]" if this is wrong.`;
 
       await say({
         text: replyText,
@@ -277,14 +263,13 @@ const handleCorrection = async (message, say) => {
       });
 
       // Update destination record if it exists
-      if (notionRecordId) {
-        if (currentFiledTo === 'projects') {
-          await updateProjectsEntry(notionRecordId, { status: parsed.newStatus });
-        } else if (currentFiledTo === 'admin') {
-          await updateAdminEntry(notionRecordId, { status: parsed.newStatus });
-        } else if (currentFiledTo === 'people') {
-          await updatePeopleEntry(notionRecordId, { status: parsed.newStatus });
-        }
+      const statusUpdaters = {
+        projects: updateProjectsEntry,
+        admin: updateAdminEntry,
+        people: updatePeopleEntry,
+      };
+      if (notionRecordId && statusUpdaters[currentFiledTo]) {
+        await statusUpdaters[currentFiledTo](notionRecordId, { status: parsed.newStatus });
       }
 
       await say({
