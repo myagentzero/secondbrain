@@ -17,8 +17,8 @@
     "url": "git+https://github.com/myagentzero/secondbrain.git"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.80.0",
-    "@notionhq/client": "^5.15.0",
+    "@anthropic-ai/sdk": "^0.92.0",
+    "@notionhq/client": "^5.20.0",
     "@slack/bolt": "^4.6.0",
     "googleapis": "^171.4.0",
     "ical-expander": "^3.2.0",

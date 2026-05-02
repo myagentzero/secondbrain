@@ -7,7 +7,10 @@ const getClient = () => {
   if (notionClient) return notionClient;
 
   const config = getNotionConfig();
-  notionClient = new Client({ auth: config.token });
+  notionClient = new Client({
+    auth: config.token,
+    notionVersion: "2026-03-11"
+  });
   return notionClient;
 };
 

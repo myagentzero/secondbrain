@@ -140,10 +140,10 @@ const runWeeklyOrphanCleanup = async () => {
             const title = record.properties?.['Name']?.title?.[0]?.plain_text || 'Unknown';
             await notion.pages.update({
               page_id: record.id,
-              archived: true
+              in_trash: true
             });
             deleted++;
-            console.log(`  Archived orphan: ${tableName}/${title}`);
+            console.log(`  Trashed orphan: ${tableName}/${title}`);
 
             // Rate limit between deletions
             await sleep(RATE_LIMIT_MS);
@@ -154,7 +154,7 @@ const runWeeklyOrphanCleanup = async () => {
       }
     }
 
-    console.log(`Weekly orphan cleanup complete — archived ${deleted} orphaned records`);
+    console.log(`Weekly orphan cleanup complete — trashed ${deleted} orphaned records`);
     return { deleted };
 
   } catch (error) {

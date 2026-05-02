@@ -255,7 +255,7 @@ const archivePage = async (pageId) => {
   const notion = getClient();
   return notion.pages.update({
     page_id: pageId,
-    archived: true
+    in_trash: true
   });
 };
 
