@@ -1,7 +1,7 @@
 const cron = require('node-cron');
 const { runDailyDigest } = require('./digests/daily');
 const { runWeeklyDigest } = require('./digests/weekly');
-const { runDailyMaintenance } = require('./digests/maintenance');
+const { runDailyMaintenance, runWeeklyOrphanCleanup } = require('./digests/maintenance');
 const { runCalendarSync } = require('./calendar/sync');
 
 let dailyJob = null;
@@ -24,17 +24,6 @@ const startScheduler = () => {
     timezone: 'America/Phoenix'
   });
 
-  // Weekly digest at 5:00 PM on Sunday (day 0)
-  weeklyJob = cron.schedule('0 17 * * 0', async () => {
-    console.log('Running scheduled weekly digest...');
-    try {
-      await runWeeklyDigest();
-    } catch (error) {
-      console.error('Weekly digest failed:', error);
-    }
-  }, {
-    timezone: 'America/Phoenix'
-  });
 
 
   // Daily maintenance at 4:30 AM Phoenix time, every day
@@ -44,6 +33,20 @@ const startScheduler = () => {
       await runDailyMaintenance();
     } catch (error) {
       console.error('Daily maintenance failed:', error);
+    }
+  }, {
+    timezone: 'America/Phoenix'
+  });
+
+  // Weekly orphan cleanup + digest at 5:00 PM on Sunday
+  weeklyJob = cron.schedule('0 17 * * 0', async () => {
+    console.log('Running scheduled weekly orphan cleanup and digest...');
+    try {
+      await runWeeklyOrphanCleanup();
+      console.log('Running scheduled weekly digest...');
+      await runWeeklyDigest();
+    } catch (error) {
+      console.error('Weekly cleanup and digest failed:', error);
     }
   }, {
     timezone: 'America/Phoenix'
@@ -88,7 +91,7 @@ const startScheduler = () => {
   console.log('Scheduler started:');
   console.log('  - Daily maintenance: 4:30 AM Phoenix time (Every day)');
   console.log('  - Daily digest: 5:00 AM Phoenix time (Mon-Fri)');
-  console.log('  - Weekly digest: Sunday 5:00 PM Phoenix time');
+  console.log('  - Weekly orphan cleanup + digest: Sunday 5:00 PM Phoenix time');
   console.log('  - Calendar sync: Weekdays 7am-3pm hourly (1 day ahead)');
   console.log('  - Calendar sync: Mon-Thu 4pm (2 days ahead)');
   console.log('  - Calendar sync: Friday 4pm (4 days ahead)');

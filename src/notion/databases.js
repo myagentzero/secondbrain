@@ -428,6 +428,43 @@ const queryOpenInboxLog = async () => {
   });
 };
 
+// Query all records from a database (with pagination)
+const queryAllRecordsFromDatabase = async (databaseId, pageSize = 100) => {
+  const allResults = [];
+  let cursor = undefined;
+
+  while (true) {
+    const response = await queryDatabase({
+      database_id: databaseId,
+      page_size: pageSize,
+      start_cursor: cursor
+    });
+
+    allResults.push(...response.results);
+
+    if (!response.has_more) break;
+    cursor = response.next_cursor;
+  }
+
+  return allResults;
+};
+
+// Query all inbox log record IDs for orphan detection
+const queryAllInboxLogRecordIds = async () => {
+  const { inboxLog } = getDatabaseIds();
+  const records = await queryAllRecordsFromDatabase(inboxLog);
+
+  const recordIds = new Set();
+  for (const record of records) {
+    const notionRecordId = record.properties?.['Notion Record ID']?.rich_text?.[0]?.plain_text;
+    if (notionRecordId) {
+      recordIds.add(notionRecordId);
+    }
+  }
+
+  return recordIds;
+};
+
 module.exports = {
   createInboxLogEntry,
   createPeopleEntry,
@@ -446,6 +483,8 @@ module.exports = {
   queryUpcomingAdmin,
   queryWeekInboxLog,
   queryAllOpenProjects,
-  queryOpenInboxLog
+  queryOpenInboxLog,
+  queryAllRecordsFromDatabase,
+  queryAllInboxLogRecordIds
 };
 

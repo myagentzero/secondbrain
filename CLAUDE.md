@@ -31,7 +31,8 @@ On first run with Google APIs, follow the OAuth flow to authorize.
 npm run brain      # Run main service (Slack bot + scheduler)
 npm run daily      # Run daily digest manually
 npm run weekly     # Run weekly digest manually
-npm run maintenance # Run maintenance tasks
+npm run maintenance # Run daily maintenance tasks
+npm run maintenance cleanup # Run weekly orphan cleanup
 npm run sync -- 1  # Sync calendar 1 day ahead
 ```
 
@@ -88,6 +89,10 @@ src/
 - Generates progress analysis and next week focus
 - Cleans up old completed tasks (>7 days)
 
+**src/digests/maintenance.js** - Maintenance tasks:
+- **Daily**: Matches completed Google Tasks to open inbox items and auto-closes them
+- **Weekly**: Orphan cleanup — archives records from People/Ideas/Projects/Admin tables that aren't referenced in Inbox Log
+
 **src/calendar/sync.js** - Calendar sync logic:
 - Fetches events from shared Google calendars
 - Downloads and parses Outlook ICS feeds
@@ -107,7 +112,7 @@ The scheduler (node-cron) manages these tasks in America/Phoenix timezone:
 
 - **4:30 AM (every day)**: Daily maintenance (task cleanup)
 - **5:00 AM (Mon-Fri)**: Daily digest generation
-- **5:00 PM (Sundays)**: Weekly digest generation
+- **5:00 PM (Sundays)**: Weekly orphan cleanup + weekly digest generation
 - **7am-3pm (weekdays, hourly)**: Calendar sync (1 day ahead)
 - **4pm (Mon-Thu)**: Calendar sync (2 days ahead)
 - **4pm (Fridays)**: Calendar sync (4 days ahead, covers weekend)
@@ -130,3 +135,4 @@ All databases have "Last Touched" date field and are linked from Inbox Log.
 - All scheduled tasks use America/Phoenix timezone
 - Confidence threshold for categorization is 0.6 (60%)
 - Events synced with COLOR_ID = 8 for visual identification
+- Weekly orphan cleanup ensures referential integrity: records are archived if not linked from Inbox Log
