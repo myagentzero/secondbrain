@@ -24,31 +24,26 @@ const statuses = {
   'Done': ['done', 'finish', 'finished', 'complete', 'completed', 'closed'],
 };
 
-const allStatusKeywords = new Set(Object.values(statuses).flat());
-
-// Parse fix/update commands
+// Parse one-word reply for status or destination
 const parseCorrection = (message) => {
-  const fixMatch = message.match(/(fix|update):\s*(.+)/i);
-  if (!fixMatch) return null;
-
-  const correction = fixMatch[2].trim().toLowerCase();
+  const word = message.trim().toLowerCase();
 
   const destinations = {
-    'people': ['people', 'person'],
+    'people': ['people', 'person',"employee", "contact"],
     'projects': ['projects', 'project'],
     'ideas': ['ideas', 'idea'],
-    'admin': ['admin', 'task', 'errand']
+    'admin': ['admin', 'task', 'errand', "todo", "chore"]
   };
 
   const newDestination = Object.entries(destinations).find(([, kws]) =>
-    kws.some(kw => correction.includes(kw))
+    kws.some(kw => word === kw)
   )?.[0] ?? null;
 
   const newStatus = Object.entries(statuses).find(([, kws]) =>
-    kws.some(kw => correction.includes(kw))
+    kws.some(kw => word === kw)
   )?.[0] ?? null;
 
-  return { newDestination, newStatus, correction };
+  return { newDestination, newStatus, word };
 };
 
 // Create entry in appropriate destination database
@@ -97,24 +92,14 @@ const setupHandlers = () => {
     // Skip bot messages
     if (message.bot_id) return;
 
-    // Skip thread replies that are fix/update commands (handled separately)
     const text = message.text || '';
-    const lowerText = text.toLowerCase();
-    if (lowerText.startsWith('fix:') || lowerText.startsWith('update:')) {
-      // Handle fix/update command
-      await handleCorrection(message, say);
-      return;
-    }
+    const lowerText = text.toLowerCase().trim();
 
-    // Handle status keyword shortcuts (e.g., "done", "active", "waiting")
-    const normalizedText = lowerText.trim();
-    if (allStatusKeywords.has(normalizedText)) {
-      await handleCorrection({ ...message, text: `update: ${normalizedText}` }, say);
-      return;
-    }
-
-    // Skip thread replies that are not top-level messages
     if (message.thread_ts && message.thread_ts !== message.ts) {
+      const words = lowerText.split(/\s+/);
+      if (words.length === 1) {
+        await handleCorrection(message, say);
+      }
       return;
     }
 
@@ -139,7 +124,7 @@ const setupHandlers = () => {
         });
 
         await say({
-          text: `I'm not sure how to classify this (confidence: ${result.confidence.toFixed(2)})\n\nCould you repost with a prefix?\n- "person: ..." for people\n- "project: ..." for projects\n- "idea: ..." for ideas\n- "admin: ..." for tasks/errands\n\nOr reply "fix: [category]" to classify this one`,
+          text: `I'm not sure how to classify this (confidence: ${result.confidence.toFixed(2)}). Please reply in the thread with one word: a status (Active, Waiting, Blocked, Done) or destination (People, Projects, Ideas, Admin).`,
           thread_ts: message.ts
         });
         return;
@@ -182,23 +167,19 @@ const setupHandlers = () => {
   });
 };
 
-// Handle fix/update corrections
+// Handle one-word reply corrections
 const handleCorrection = async (message, say) => {
   const text = message.text || '';
   const threadTs = message.thread_ts;
 
-  if (!threadTs) {
-    await say({
-      text: 'Fix/update commands must be replies to the original message thread.',
-      thread_ts: message.ts
-    });
-    return;
-  }
-
   const parsed = parseCorrection(text);
-  if (!parsed) {
+  if (!parsed.newDestination && !parsed.newStatus) {
+    const availableOptions = [
+      '*Statuses*: Active, Waiting, Blocked, Done',
+      '*Destinations*: People, Projects, Ideas, Admin'
+    ];
     await say({
-      text: 'Could not parse the correction. Use "fix: [category]" or "update: [status]"',
+      text: `I don't recognize "${text}". Available one-word replies:\n\n${availableOptions.join('\n')}`,
       thread_ts: threadTs
     });
     return;
@@ -219,7 +200,7 @@ const handleCorrection = async (message, say) => {
     const currentFiledTo = inboxLogEntry.properties?.['Filed-To']?.select?.name || '';
     const notionRecordId = inboxLogEntry.properties?.['Notion Record ID']?.rich_text?.[0]?.plain_text || '';
 
-    // Handle destination change (fix: command)
+    // Handle destination change
     if (parsed.newDestination) {
       console.log(`Re-categorizing to ${parsed.newDestination}`);
 
@@ -253,7 +234,7 @@ const handleCorrection = async (message, say) => {
       return;
     }
 
-    // Handle status update (update: command)
+    // Handle status update
     if (parsed.newStatus) {
       console.log(`Updating status to ${parsed.newStatus}`);
 
@@ -278,11 +259,6 @@ const handleCorrection = async (message, say) => {
       });
       return;
     }
-
-    await say({
-      text: 'Could not determine what to update. Use "fix: [category]" or "update: [status]"',
-      thread_ts: threadTs
-    });
 
   } catch (error) {
     console.error('Error handling correction:', error);
