@@ -136,7 +136,7 @@ async function main() {
       case 'sync':       await cmdSync(args); break;
       default:
         process.stderr.write([
-          'Usage: npm run cli -- <command> [args]',
+          'gws-calendar <command> [args]',
           '',
           'Commands:',
           '  agenda [--days N]                             Show calendar agenda (default: today)',
