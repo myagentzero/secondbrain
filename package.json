@@ -8,7 +8,8 @@
     "daily": "node src/digests/daily.js",
     "weekly": "node src/digests/weekly.js",
     "maintenance": "node src/digests/maintenance.js",
-    "sync": "node src/calendar/sync.js"
+    "sync": "node src/calendar/sync.js",
+    "gws-calendar": "node src/cli.js"
   },
   "author": "myagentzero",
   "license": "ISC",

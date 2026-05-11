@@ -74,6 +74,14 @@ npm install
 # Run Second Brain service (Slack bot + scheduler)
 npm run brain
 
+# CLI for calendar and tasks (Google Workspace integration)
+npm run gws-calendar -- agenda                              # Show today's agenda
+npm run gws-calendar -- agenda --days 3                     # Show next 3 days
+npm run gws-calendar -- add-event "Title" "2026-05-11 09:00" "2026-05-11 10:00"
+npm run gws-calendar -- tasks                               # List open tasks
+npm run gws-calendar -- complete <taskId>                   # Mark task as complete
+npm run gws-calendar -- sync 1                              # Sync calendar 1 day ahead
+
 # Run calendar sync manually (max 4 days)
 npm run sync -- 1    # sync 1 day ahead
 npm run sync -- 4    # sync 4 days (weekend coverage, maximum allowed)
@@ -137,6 +145,7 @@ For clearer classification, use prefixes:
 ```
 src/
 ├── index.js              # Main entry point (starts Slack bot + scheduler)
+├── cli.js                # CLI tool for manual calendar/task operations
 ├── config.js             # Load credentials from credentials.json
 ├── scheduler.js          # node-cron for scheduled tasks (America/Phoenix tz)
 ├── slack/
@@ -150,16 +159,39 @@ src/
 ├── claude/
 │   └── categorize.js     # AI categorization + digest generation prompts
 ├── calendar/
-│   ├── events.js         # Google Calendar event creation
+│   ├── events.js         # Google Calendar event creation & agenda retrieval
 │   ├── sync.js           # Calendar sync from Outlook/shared calendars
 │   └── timeUtility.js    # Timezone conversion utilities
 ├── tasks/
-│   └── tasks.js          # Google Tasks CRUD + cleanup
+│   └── tasks.js          # Google Tasks CRUD + cleanup + completion
 └── digests/
     ├── daily.js          # Daily digest (5am, Mon-Fri)
     ├── weekly.js         # Weekly digest (Sunday 5pm)
     └── maintenance.js    # Cleanup tasks (4:30am daily)
 ```
+
+## CLI Tool
+
+The `gws-calendar` CLI provides quick access to calendar and task operations:
+
+```bash
+# Show your agenda
+npm run gws-calendar -- agenda              # Today
+npm run gws-calendar -- agenda --days 7     # Next 7 days
+
+# Create calendar events (times in Phoenix timezone)
+npm run gws-calendar -- add-event "Meeting" "2026-05-11 14:00" "2026-05-11 15:00"
+npm run gws-calendar -- add-event "Lunch" "2026-05-11 12:00" "2026-05-11 13:00" "With team"
+
+# Manage Google Tasks
+npm run gws-calendar -- tasks               # List open tasks
+npm run gws-calendar -- complete abc123     # Mark task as done
+
+# Sync calendar events
+npm run gws-calendar -- sync 3               # Sync 3 days ahead
+```
+
+All times are in Phoenix timezone (UTC-7, no DST).
 
 ## Google Tasks Integration
 

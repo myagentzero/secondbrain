@@ -70,6 +70,23 @@ const getOldCompletedTasks = async (daysOld = 7) => {
   });
 };
 
+// Mark a task as completed
+const completeTask = async (taskId) => {
+  const auth = await authorize();
+  const tasks = google.tasks({ version: 'v1', auth });
+
+  return new Promise((resolve, reject) => {
+    tasks.tasks.patch({
+      tasklist: '@default',
+      task: taskId,
+      resource: { status: 'completed', completed: new Date().toISOString() }
+    }, (err, result) => {
+      if (err) reject(err);
+      else resolve(result.data);
+    });
+  });
+};
+
 // Delete a single task by ID
 const deleteTask = async (taskId) => {
   const auth = await authorize();
@@ -171,5 +188,6 @@ module.exports = {
   createDailyTasks,
   listTasks,
   listCompletedTasks,
+  completeTask,
   deleteOldCompletedTasks
 };

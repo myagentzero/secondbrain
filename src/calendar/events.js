@@ -102,6 +102,32 @@ const createDailyDigestEvent = async (summary) => {
   });
 };
 
+// List primary calendar events for the next N days starting from today (Phoenix time)
+const getAgenda = async (days = 1) => {
+  const auth = await authorize();
+  const calendar = google.calendar({ version: 'v3', auth });
+
+  // Phoenix is always UTC-7 (no DST)
+  const tzOffset = 7 * 60 * 60 * 1000;
+  const now = new Date();
+  const startOfToday = new Date(Math.floor((now.getTime() - tzOffset) / 86400000) * 86400000 + tzOffset);
+  const endTime = new Date(startOfToday.getTime() + days * 86400000);
+
+  return new Promise((resolve, reject) => {
+    calendar.events.list({
+      calendarId: 'primary',
+      timeMin: startOfToday.toISOString(),
+      timeMax: endTime.toISOString(),
+      singleEvents: true,
+      orderBy: 'startTime',
+      maxResults: 50
+    }, (err, result) => {
+      if (err) reject(err);
+      else resolve(result.data.items || []);
+    });
+  });
+};
+
 // Create a generic calendar event
 const createCalendarEvent = async ({ summary, description, startTime, endTime }) => {
   const auth = await authorize();
@@ -139,5 +165,6 @@ const createCalendarEvent = async ({ summary, description, startTime, endTime })
 module.exports = {
   authorize,
   createDailyDigestEvent,
-  createCalendarEvent
+  createCalendarEvent,
+  getAgenda
 };
