@@ -1,4 +1,4 @@
-const { getClient, getDatabaseIds, queryDatabase } = require('./client');
+const { getDatabaseIds, queryDatabase, createPage, updatePage } = require('./client');
 
 const getMSTDate = () => {
   return new Date().toLocaleString('sv-SE', { timeZone: 'America/Phoenix' }).replace(' ', 'T');
@@ -74,7 +74,6 @@ const createInboxLogEntry = async ({
   slackThreadTs,
   filedTo
 }) => {
-  const notion = getClient();
   const { inboxLog } = getDatabaseIds();
 
   const properties = {
@@ -98,7 +97,7 @@ const createInboxLogEntry = async ({
     properties['Status'] = { select: { name: status } };
   }
 
-  return notion.pages.create({
+  return createPage({
     parent: { database_id: inboxLog },
     properties
   });
@@ -106,7 +105,6 @@ const createInboxLogEntry = async ({
 
 // Create People entry
 const createPeopleEntry = async ({ name, status, context, followUps, tags }) => {
-  const notion = getClient();
   const { people } = getDatabaseIds();
 
   const properties = {
@@ -125,7 +123,7 @@ const createPeopleEntry = async ({ name, status, context, followUps, tags }) => 
     properties['Tags'] = { multi_select: tags.map(t => ({ name: t })) };
   }
 
-  return notion.pages.create({
+  return createPage({
     parent: { database_id: people },
     properties
   });
@@ -133,7 +131,6 @@ const createPeopleEntry = async ({ name, status, context, followUps, tags }) => 
 
 // Create Projects entry
 const createProjectsEntry = async ({ name, status, nextAction, notes, tags }) => {
-  const notion = getClient();
   const { projects } = getDatabaseIds();
 
   const properties = {
@@ -152,7 +149,7 @@ const createProjectsEntry = async ({ name, status, nextAction, notes, tags }) =>
     properties['Tags'] = { multi_select: tags.map(t => ({ name: t })) };
   }
 
-  return notion.pages.create({
+  return createPage({
     parent: { database_id: projects },
     properties
   });
@@ -160,7 +157,6 @@ const createProjectsEntry = async ({ name, status, nextAction, notes, tags }) =>
 
 // Create Ideas entry
 const createIdeasEntry = async ({ name, oneLiner, notes, tags }) => {
-  const notion = getClient();
   const { ideas } = getDatabaseIds();
 
   const properties = {
@@ -178,7 +174,7 @@ const createIdeasEntry = async ({ name, oneLiner, notes, tags }) => {
     properties['Tags'] = { multi_select: tags.map(t => ({ name: t })) };
   }
 
-  return notion.pages.create({
+  return createPage({
     parent: { database_id: ideas },
     properties
   });
@@ -186,7 +182,6 @@ const createIdeasEntry = async ({ name, oneLiner, notes, tags }) => {
 
 // Create Admin entry
 const createAdminEntry = async ({ name, notes, status, dueDate }) => {
-  const notion = getClient();
   const { admin } = getDatabaseIds();
 
   const properties = {
@@ -201,7 +196,7 @@ const createAdminEntry = async ({ name, notes, status, dueDate }) => {
   const effectiveDueDate = formatDateForNotion(dueDate) || getDefaultAdminDueDate();
   properties['Due Date'] = { date: { start: effectiveDueDate.toISOString().split('T')[0] } };
 
-  return notion.pages.create({
+  return createPage({
     parent: { database_id: admin },
     properties
   });
@@ -225,7 +220,6 @@ const findInboxLogByThreadTs = async (threadTs) => {
 
 // Update Inbox Log entry
 const updateInboxLogEntry = async (pageId, updates) => {
-  const notion = getClient();
   const properties = {};
 
   if (updates.status) {
@@ -244,7 +238,7 @@ const updateInboxLogEntry = async (pageId, updates) => {
     properties['Notion Record ID'] = { rich_text: [{ text: { content: updates.notionRecordId } }] };
   }
 
-  return notion.pages.update({
+  return updatePage({
     page_id: pageId,
     properties
   });
@@ -252,8 +246,7 @@ const updateInboxLogEntry = async (pageId, updates) => {
 
 // Archive a page (used for re-categorization)
 const archivePage = async (pageId) => {
-  const notion = getClient();
-  return notion.pages.update({
+  return updatePage({
     page_id: pageId,
     in_trash: true
   });
@@ -261,7 +254,6 @@ const archivePage = async (pageId) => {
 
 // Update Projects status
 const updateProjectsEntry = async (pageId, { status }) => {
-  const notion = getClient();
   const properties = {
     'Last Touched': { date: { start: getMSTDate() } }
   };
@@ -270,7 +262,7 @@ const updateProjectsEntry = async (pageId, { status }) => {
     properties['Status'] = { select: { name: status } };
   }
 
-  return notion.pages.update({
+  return updatePage({
     page_id: pageId,
     properties
   });
@@ -278,7 +270,6 @@ const updateProjectsEntry = async (pageId, { status }) => {
 
 // Update Admin status
 const updateAdminEntry = async (pageId, { status }) => {
-  const notion = getClient();
   const properties = {
     'Created': { date: { start: getMSTDate() } }
   };
@@ -287,7 +278,7 @@ const updateAdminEntry = async (pageId, { status }) => {
     properties['Status'] = { select: { name: status } };
   }
 
-  return notion.pages.update({
+  return updatePage({
     page_id: pageId,
     properties
   });
@@ -295,7 +286,6 @@ const updateAdminEntry = async (pageId, { status }) => {
 
 // Update People status
 const updatePeopleEntry = async (pageId, { status }) => {
-  const notion = getClient();
   const properties = {
     'Last Touched': { date: { start: getMSTDate() } }
   };
@@ -304,7 +294,7 @@ const updatePeopleEntry = async (pageId, { status }) => {
     properties['Status'] = { select: { name: status } };
   }
 
-  return notion.pages.update({
+  return updatePage({
     page_id: pageId,
     properties
   });

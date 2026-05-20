@@ -6,7 +6,7 @@ let primaryClient = null;
 let secondaryClient = null;
 let config = null;
 
-const USER_AGENT = 'claude-code/2.1.119; +https://support.anthropic.com/';
+const USER_AGENT = 'claude-code/2.1.143; +https://support.anthropic.com/';
 
 const FALLBACK_ERRORS = [
   'ECONNREFUSED',

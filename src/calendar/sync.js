@@ -62,7 +62,7 @@ const runCalendarSync = async (syncDays) => {
   console.log('Downloading ics file...');
   const icsResponse = await fetchText(config.icsCalendarUrl, {
     headers: {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36',
       'Accept': 'text/calendar,text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8'
     }
   });
