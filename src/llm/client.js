@@ -1,12 +1,12 @@
 const Anthropic = require('@anthropic-ai/sdk');
 const OpenAI = require('openai');
-const { getLLMConfig, getAnthropicConfig } = require('../config');
+const { getLLMConfig, getAnthropicConfig, getLLMUserAgent } = require('../config');
 
 let primaryClient = null;
 let secondaryClient = null;
 let config = null;
 
-const USER_AGENT = 'claude-code/2.1.143; +https://support.anthropic.com/';
+const USER_AGENT = getLLMUserAgent();
 
 const FALLBACK_ERRORS = [
   'ECONNREFUSED',

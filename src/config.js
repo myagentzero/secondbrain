@@ -55,6 +55,11 @@ const getLLMConfig = () => {
   return cfg.llm;
 };
 
+const getLLMUserAgent = () => {
+  const cfg = loadConfig();
+  return (cfg.llm && cfg.llm.userAgent) || 'secondbrain/1.0';
+};
+
 module.exports = {
   loadConfig,
   getGoogleCredentials,
@@ -62,5 +67,6 @@ module.exports = {
   getSlackConfig,
   getNotionConfig,
   getAnthropicConfig,
-  getLLMConfig
+  getLLMConfig,
+  getLLMUserAgent
 };
