@@ -8,15 +8,15 @@ const { getSlackConfig } = require('../config');
 const { deleteOldCompletedTasks, listCompletedTasks } = require('../tasks/tasks');
 const { spawn } = require('child_process');
 
-// Store content in Zeroclaw memory
+// Store content in agentzero memory
 const memoryStore = (key, content, category) => {
   return new Promise((resolve, reject) => {
-    const proc = spawn('zeroclaw', ['memory', 'store', key, content, '--category', category]);
+    const proc = spawn('agentzero', ['memory', 'store', key, content, '--category', category]);
     let stderr = '';
     proc.stderr.on('data', (data) => { stderr += data.toString(); });
     proc.on('close', (code) => {
       if (code === 0) resolve();
-      else reject(new Error(`zeroclaw exited with code ${code}: ${stderr}`));
+      else reject(new Error(`agentzero exited with code ${code}: ${stderr}`));
     });
     proc.on('error', (err) => reject(err));
   });
@@ -101,13 +101,13 @@ const runWeeklyDigest = async () => {
     });
     console.log('Posted to Slack');
 
-    // Store digest in Zeroclaw memory
+    // Store digest in agentzero memory
     try {
       const today = new Date().toISOString().split('T')[0].replace(/-/g, '_');
       await memoryStore(`secondbrain_weekly_digest_${today}`, digest, 'daily');
-      console.log('Stored digest in Zeroclaw memory');
+      console.log('Stored digest in agentzero memory');
     } catch (memError) {
-      console.error('Failed to store in Zeroclaw memory:', memError.message);
+      console.error('Failed to store in agentzero memory:', memError.message);
     }
 
     // Clean up completed Google Tasks older than 7 days

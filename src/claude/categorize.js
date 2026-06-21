@@ -87,14 +87,19 @@ RULES:
 - "next_action" must be specific and executable. "Work on website" is bad. "Email Sarah to confirm deadline" is good.
 - If a person's name is mentioned, consider if this is really about that person or about a project/task involving them
 - Status options for projects: "Active", "Waiting", "Blocked"
-- Today's date is {{TODAY}}. Use this to resolve relative dates like "tomorrow", "next week", "Friday", etc.
+- Today is {{TODAY}} ({{DAY_OF_WEEK}}). Use this to resolve relative dates like "tomorrow", "next week", "Friday", etc.
 - Extract dates when mentioned and format as YYYY-MM-DD. Due date should be a date in the future, otherwise set to null
 - If no clear tags apply, use an empty array []
 - Always return valid JSON with no markdown formatting`;
 
 const categorizeMessage = async (text) => {
-  const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Phoenix' });
-  const prompt = CATEGORIZATION_PROMPT.replace('{{INPUT}}', text).replace('{{TODAY}}', today);
+  const date = new Date();
+  const today = date.toLocaleDateString('sv-SE', { timeZone: 'America/Phoenix' });
+  const dayOfWeek = date.toLocaleDateString('en-US', { weekday: 'long', timeZone: 'America/Phoenix' });
+  const prompt = CATEGORIZATION_PROMPT
+    .replace('{{INPUT}}', text)
+    .replace('{{TODAY}}', today)
+    .replace('{{DAY_OF_WEEK}}', dayOfWeek);
 
   const response = await createMessage({
     model: getModel(),
@@ -216,7 +221,7 @@ const DAILY_DIGEST_STRUCTURED_PROMPT = `You are a personal productivity assistan
 
 {{COMPLETED_TASKS}}
 
-TODAY'S DATE: {{DATE}}
+TODAY'S DATE: {{DATE}} ({{DAY_OF_WEEK}})
 
 OUTPUT FORMAT (return ONLY this JSON, no other text):
 {
@@ -246,7 +251,9 @@ RULES:
 - Always return valid JSON with no markdown formatting`;
 
 const generateDailyDigestStructured = async (context, existingTasks = [], completedTasks = []) => {
-  const date = new Date().toLocaleString('sv-SE', { timeZone: 'America/Phoenix' }).split(' ')[0];
+  const dateObj = new Date();
+  const date = dateObj.toLocaleString('sv-SE', { timeZone: 'America/Phoenix' }).split(' ')[0];
+  const dayOfWeek = dateObj.toLocaleDateString('en-US', { weekday: 'long', timeZone: 'America/Phoenix' });
 
   // Format existing tasks for the prompt
   const existingTasksText = existingTasks.length > 0
@@ -261,6 +268,7 @@ const generateDailyDigestStructured = async (context, existingTasks = [], comple
   const prompt = DAILY_DIGEST_STRUCTURED_PROMPT
     .replace('{{CONTEXT}}', context)
     .replace('{{DATE}}', date)
+    .replace('{{DAY_OF_WEEK}}', dayOfWeek)
     .replace('{{EXISTING_TASKS}}', existingTasksText)
     .replace('{{COMPLETED_TASKS}}', completedTasksText);
 
@@ -324,6 +332,7 @@ const formatDigestForSlack = (digest) => {
 const WEEKLY_DIGEST_PROMPT = `You are a personal productivity assistant conducting a weekly review. Analyze the following data and generate an insightful summary.
 
 {{CONTEXT}}
+TODAY'S DATE: {{DATE}} ({{DAY_OF_WEEK}})
 TOTAL CAPTURES THIS WEEK: {{TOTAL_CAPTURES}}
 {{COMPLETED_TASKS}}
 
@@ -369,12 +378,18 @@ RULES:
 - Use emojis sparingly for emphasis, not decoration`;
 
 const generateWeeklyDigest = async (context, totalCaptures, completedTasks = []) => {
+  const dateObj = new Date();
+  const date = dateObj.toLocaleString('sv-SE', { timeZone: 'America/Phoenix' }).split(' ')[0];
+  const dayOfWeek = dateObj.toLocaleDateString('en-US', { weekday: 'long', timeZone: 'America/Phoenix' });
+
   const completedTasksText = completedTasks.length > 0
     ? '\nCOMPLETED TASKS THIS WEEK:\n' + completedTasks.map(t => ` - ${t.title}`).join('\n')
     : '';
 
   const prompt = WEEKLY_DIGEST_PROMPT
     .replace('{{CONTEXT}}', context)
+    .replace('{{DATE}}', date)
+    .replace('{{DAY_OF_WEEK}}', dayOfWeek)
     .replace('{{TOTAL_CAPTURES}}', totalCaptures.toString())
     .replace('{{COMPLETED_TASKS}}', completedTasksText);
 
