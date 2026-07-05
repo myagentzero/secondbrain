@@ -1,9 +1,9 @@
 const { createMessage, getModel } = require('../llm/client');
 
-const CATEGORIZATION_PROMPT = `INPUT:
+const CATEGORIZATION_PROMPT = `# INPUT
 {{INPUT}}
 
-INSTRUCTIONS:
+# INSTRUCTIONS
 1. Determine which category this belongs to:
    - "people" - information about a person, relationship update, something someone said
    - "projects" - a project, task with multiple steps, ongoing work
@@ -20,7 +20,7 @@ INSTRUCTIONS:
 
 4. If confidence is below 0.6, set destination to "needs_review"
 
-OUTPUT FORMAT (return ONLY this JSON, no other text):
+5. Return ONLY this JSON, no other text
 
 For PEOPLE:
 {
@@ -28,7 +28,7 @@ For PEOPLE:
   "confidence": 0.85,
   "data": {
     "name": "Person's Name",
-    "status": "Active when there is something to follow up on, otherwise set to Needs Review",
+    "status": "Active",
     "context": "How you know them or their role",
     "follow_ups": "Things to remember for next time",
     "tags": ["work", "friend"]
@@ -83,18 +83,19 @@ For UNCLEAR (confidence below 0.6):
   }
 }
 
-RULES:
+# RULES
 - "next_action" must be specific and executable. "Work on website" is bad. "Email Sarah to confirm deadline" is good.
 - If a person's name is mentioned, consider if this is really about that person or about a project/task involving them
-- Status options for projects: "Active", "Waiting", "Blocked"
-- Today is {{TODAY}} ({{DAY_OF_WEEK}}). Use this to resolve relative dates like "tomorrow", "next week", "Friday", etc.
+- Status options for people: "Active", "Needs Review"
+- Status options for projects and admin: "Active", "Waiting", "Blocked", "Done"
+- Today's Unix timestamp is {{TODAY}} ({{DAY_OF_WEEK}}). Use this to resolve relative dates like "tomorrow", "next week", "Friday", etc.
 - Extract dates when mentioned and format as YYYY-MM-DD. Due date should be a date in the future, otherwise set to null
 - If no clear tags apply, use an empty array []
 - Always return valid JSON with no markdown formatting`;
 
 const categorizeMessage = async (text) => {
   const date = new Date();
-  const today = date.toLocaleDateString('sv-SE', { timeZone: 'America/Phoenix' });
+  const today = Math.floor(date.getTime() / 1000);
   const dayOfWeek = date.toLocaleDateString('en-US', { weekday: 'long', timeZone: 'America/Phoenix' });
   const prompt = CATEGORIZATION_PROMPT
     .replace('{{INPUT}}', text)
@@ -144,13 +145,15 @@ const parseCategorizationResponse = (response) => {
 
 const RECLASSIFICATION_PROMPT = `Extract structured data from this text for a {{CATEGORY}} record.
 
-TEXT:
 {{TEXT}}
 
 CATEGORY: {{CATEGORY}}
 STATUS: {{STATUS}}
+Today's Unix timestamp is {{TODAY}} ({{DAY_OF_WEEK}})
 
-OUTPUT FORMAT (return ONLY this JSON, no other text):
+# INSTRUCTIONS
+
+Return ONLY this JSON, no other text
 
 For PEOPLE:
 {
@@ -193,16 +196,28 @@ For ADMIN:
   "data": {
     "name": "Task name",
     "status": "Active",
-    "due_date": "2026-01-15 or null if not specified",
+    "due_date": "YYYY-MM-DD or null if not specified",
     "notes": "Additional context and details to follow up on"
   }
-}`;
+}
+
+# RULES
+- Status options for people: "Active", "Needs Review"
+- Status options for projects and admin: "Active", "Waiting", "Blocked", "Done"
+- "next_action" must be specific and executable
+- Extract dates when mentioned and format as YYYY-MM-DD. Due date should be a date in the future, otherwise set to null
+- If no clear tags apply, use an empty array []`;
 
 const reclassifyMessage = async (text, newCategory, currentStatus) => {
+  const dateObj = new Date();
+  const today = Math.floor(dateObj.getTime() / 1000);
+  const dayOfWeek = dateObj.toLocaleDateString('en-US', { weekday: 'long', timeZone: 'America/Phoenix' });
   const prompt = RECLASSIFICATION_PROMPT
     .replace(/{{CATEGORY}}/g, newCategory)
     .replace('{{TEXT}}', text)
-    .replace('{{STATUS}}', currentStatus || 'Active');
+    .replace('{{STATUS}}', currentStatus || 'Active')
+    .replace('{{TODAY}}', today)
+    .replace('{{DAY_OF_WEEK}}', dayOfWeek);
 
   const response = await createMessage({
     model: getModel(),
@@ -221,9 +236,9 @@ const DAILY_DIGEST_STRUCTURED_PROMPT = `You are a personal productivity assistan
 
 {{COMPLETED_TASKS}}
 
-TODAY'S DATE: {{DATE}} ({{DAY_OF_WEEK}})
+Today's Unix timestamp is {{DATE}} ({{DAY_OF_WEEK}})
 
-OUTPUT FORMAT (return ONLY this JSON, no other text):
+# OUTPUT FORMAT (return ONLY this JSON, no other text)
 {
   "newTasks": [
     { "title": "Most important action", "notes": "Brief context or source" },
@@ -237,7 +252,7 @@ OUTPUT FORMAT (return ONLY this JSON, no other text):
   "smallWin": "Something positive or progress made, or encouraging thought"
 }
 
-RULES:
+# RULES
 - Be specific and actionable, not motivational
 - "Work on website" is bad. "Email Sarah to confirm deadline" is a good task
 - Prioritize TASKS DUE and ACTIVE PROJECTS based on concrete actions for newTasks
@@ -252,7 +267,7 @@ RULES:
 
 const generateDailyDigestStructured = async (context, existingTasks = [], completedTasks = []) => {
   const dateObj = new Date();
-  const date = dateObj.toLocaleString('sv-SE', { timeZone: 'America/Phoenix' }).split(' ')[0];
+  const date = Math.floor(dateObj.getTime() / 1000);
   const dayOfWeek = dateObj.toLocaleDateString('en-US', { weekday: 'long', timeZone: 'America/Phoenix' });
 
   // Format existing tasks for the prompt
@@ -332,11 +347,11 @@ const formatDigestForSlack = (digest) => {
 const WEEKLY_DIGEST_PROMPT = `You are a personal productivity assistant conducting a weekly review. Analyze the following data and generate an insightful summary.
 
 {{CONTEXT}}
-TODAY'S DATE: {{DATE}} ({{DAY_OF_WEEK}})
+Today's Unix timestamp is {{DATE}} ({{DAY_OF_WEEK}})
 TOTAL CAPTURES THIS WEEK: {{TOTAL_CAPTURES}}
 {{COMPLETED_TASKS}}
 
-INSTRUCTIONS:
+# INSTRUCTIONS
 Create a weekly review with EXACTLY this format. Keep it under 250 words total.
 
 ---
@@ -368,7 +383,7 @@ Create a weekly review with EXACTLY this format. Keep it under 250 words total.
 
 ---
 
-RULES:
+# RULES
 - Be analytical, not motivational
 - Call out projects that have not had action in over a week
 - Note if capture volume was unusually high or low
@@ -379,7 +394,7 @@ RULES:
 
 const generateWeeklyDigest = async (context, totalCaptures, completedTasks = []) => {
   const dateObj = new Date();
-  const date = dateObj.toLocaleString('sv-SE', { timeZone: 'America/Phoenix' }).split(' ')[0];
+  const date = Math.floor(dateObj.getTime() / 1000);
   const dayOfWeek = dateObj.toLocaleDateString('en-US', { weekday: 'long', timeZone: 'America/Phoenix' });
 
   const completedTasksText = completedTasks.length > 0
@@ -404,13 +419,13 @@ const generateWeeklyDigest = async (context, totalCaptures, completedTasks = [])
 
 const TASK_COMPLETION_MATCH_PROMPT = `You are matching completed Google Tasks against open inbox items from a personal productivity system.
 
-COMPLETED TASKS:
+# COMPLETED TASKS
 {{TASKS}}
 
-OPEN INBOX ITEMS:
+# OPEN INBOX ITEMS
 {{INBOX_ITEMS}}
 
-INSTRUCTIONS:
+# INSTRUCTIONS
 For each completed task, check if it semantically matches an open inbox item. A match means the task and inbox item refer to the same action, project, or topic — even if worded differently.
 
 OUTPUT FORMAT (return ONLY this JSON, no other text):
@@ -425,7 +440,7 @@ OUTPUT FORMAT (return ONLY this JSON, no other text):
   ]
 }
 
-RULES:
+# RULES
 - Only include matches with confidence >= 0.7
 - Each inbox item should match at most one task
 - If no matches exist, return { "matches": [] }
