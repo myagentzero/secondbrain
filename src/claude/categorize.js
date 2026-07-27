@@ -104,7 +104,7 @@ const categorizeMessage = async (text) => {
 
   const response = await createMessage({
     model: getModel(),
-    maxTokens: 1024,
+    maxTokens: 2048,
     messages: [{ role: 'user', content: prompt }]
   });
 
@@ -221,7 +221,7 @@ const reclassifyMessage = async (text, newCategory, currentStatus) => {
 
   const response = await createMessage({
     model: getModel(),
-    maxTokens: 1024,
+    maxTokens: 2048,
     messages: [{ role: 'user', content: prompt }]
   });
 
@@ -289,7 +289,7 @@ const generateDailyDigestStructured = async (context, existingTasks = [], comple
 
   const response = await createMessage({
     model: getModel(),
-    maxTokens: 1024,
+    maxTokens: 4096,
     messages: [{ role: 'user', content: prompt }]
   });
 
@@ -302,10 +302,11 @@ const generateDailyDigestStructured = async (context, existingTasks = [], comple
     return JSON.parse(cleaned);
   } catch (e) {
     console.error('Failed to parse structured digest:', e.message);
+    console.error('Raw response was:', aiResponse);
     return {
       newTasks: [],
       peopleToConnect: [],
-      watchOutFor: null,
+      watchOutFor: 'Digest generation failed to parse today — check server logs for the raw model response.',
       smallWin: null,
       error: e.message
     };
@@ -410,7 +411,7 @@ const generateWeeklyDigest = async (context, totalCaptures, completedTasks = [])
 
   const response = await createMessage({
     model: getModel(),
-    maxTokens: 1024,
+    maxTokens: 4096,
     messages: [{ role: 'user', content: prompt }]
   });
 
@@ -467,7 +468,7 @@ const matchCompletedTasksToInbox = async (completedTasks, inboxItems) => {
 
   const response = await createMessage({
     model: getModel(),
-    maxTokens: 1024,
+    maxTokens: 4096,
     messages: [{ role: 'user', content: prompt }]
   });
 
