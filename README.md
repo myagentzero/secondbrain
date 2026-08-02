@@ -47,7 +47,7 @@ A self-hosted productivity system that captures thoughts from Slack, categorizes
 
 1. Go to https://api.slack.com/apps and create new app
 2. Enable Socket Mode (Settings > Socket Mode > Enable)
-3. Add Bot Token Scopes: `channels:history`, `channels:read`, `chat:write`
+3. Add Bot Token Scopes: `channels:history`, `channels:read`, `chat:write`, `reactions:write`
 4. Install to workspace
 5. Copy Bot Token (`xoxb-...`) and App Token (`xapp-...`) to `credentials.json`
 

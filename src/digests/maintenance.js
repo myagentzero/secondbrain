@@ -85,6 +85,12 @@ const runDailyMaintenance = async () => {
             text: `Auto-closed: matched completed task "${match.matchedTaskTitle}"`,
             thread_ts: threadTs
           });
+
+          try {
+            await app.client.reactions.add({ channel, timestamp: threadTs, name: 'checkered_flag' });
+          } catch (error) {
+            console.log('Could not add :checkered_flag: reaction:', error.message);
+          }
         }
 
         closed++;

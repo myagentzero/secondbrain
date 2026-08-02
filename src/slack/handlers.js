@@ -15,6 +15,23 @@ const {
 } = require('../notion/databases');
 
 const CONFIDENCE_THRESHOLD = 0.6;
+const PROCESSING_REACTION = 'hourglass_flowing_sand';
+
+const addReaction = async (app, channel, timestamp, name) => {
+  try {
+    await app.client.reactions.add({ channel, timestamp, name });
+  } catch (error) {
+    console.log(`Could not add :${name}: reaction:`, error.message);
+  }
+};
+
+const removeReaction = async (app, channel, timestamp, name) => {
+  try {
+    await app.client.reactions.remove({ channel, timestamp, name });
+  } catch (error) {
+    console.log(`Could not remove :${name}: reaction:`, error.message);
+  }
+};
 
 // Status keywords mapping (module-level for reuse)
 const statuses = {
@@ -105,6 +122,8 @@ const setupHandlers = () => {
 
     console.log(`Processing message: ${text.substring(0, 50)}...`);
 
+    await addReaction(app, message.channel, message.ts, PROCESSING_REACTION);
+
     try {
       // Categorize with Claude
       const result = await categorizeMessage(text);
@@ -163,6 +182,8 @@ const setupHandlers = () => {
         text: `Sorry, I encountered an error processing this message: ${error.message}`,
         thread_ts: message.ts
       });
+    } finally {
+      await removeReaction(app, message.channel, message.ts, PROCESSING_REACTION);
     }
   });
 };
