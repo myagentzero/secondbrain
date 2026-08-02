@@ -8,7 +8,11 @@ const CATEGORIZATION_PROMPT = `# INPUT
    - "people" - information about a person, relationship update, something someone said
    - "projects" - a project, task with multiple steps, ongoing work
    - "ideas" - a thought, insight, concept, something to explore later
-   - "admin" - a simple errand, one-off task, something with a due date, or a reminder
+   - "admin" - a simple errand, one-off task, meeting/event prep, something with a due date or deadline, or a reminder. A one-off task is still admin even if it involves coordinating with another person (e.g. "finalize the agenda with Dan on Monday", "complete pre-work for the offsite by 7/27") — it only becomes a project if it has multiple ongoing steps or no clear end date.
+
+   Ticket-tracker heuristic (apply before falling back to "needs_review"):
+   - If a Jira ticket (or "ticket"/"tickets" in a Jira-like engineering context) is mentioned, default to "projects" — creating/managing tickets implies ongoing, multi-step work.
+   - If a ServiceNow ticket is mentioned, default to "admin" — ServiceNow tickets are typically one-off requests or errands.
 
 2. Extract the relevant fields based on category
 
@@ -85,7 +89,8 @@ For UNCLEAR (confidence below 0.6):
 
 # RULES
 - "next_action" must be specific and executable. "Work on website" is bad. "Email Sarah to confirm deadline" is good.
-- If a person's name is mentioned, consider if this is really about that person or about a project/task involving them
+- If a person's name is mentioned, consider if this is really about that person or about a project/task involving them. Mentioning a person's name for coordination on a single task (e.g. "with Dan", "with Sarah") does NOT by itself lower confidence or make something "needs_review" — it's still a normal admin/project item.
+- A concrete one-off task with a deadline, a named event/meeting, or a clear single deliverable should score 0.8+ confidence as "admin" (or "projects" if it clearly has multiple ongoing steps) — do not default to "needs_review" just because a date or person is present.
 - Status options for people: "Active", "Needs Review"
 - Status options for projects and admin: "Active", "Waiting", "Blocked", "Done"
 - Today's Unix timestamp is {{TODAY}} ({{DAY_OF_WEEK}}). Use this to resolve relative dates like "tomorrow", "next week", "Friday", etc.
