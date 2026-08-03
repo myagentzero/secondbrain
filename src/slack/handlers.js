@@ -35,7 +35,7 @@ const removeReaction = async (app, channel, timestamp, name) => {
 
 // Status keywords mapping (module-level for reuse)
 const statuses = {
-  'Active': ['active', 'started', 'progress', 'todo', 'unknown'],
+  'Active': ['active', 'open', 'started', 'progress', 'todo', 'unknown'],
   'Waiting': ['waiting', 'someday', 'pending', 'hold'],
   'Blocked': ['blocked', 'block', 'stuck', 'issue'],
   'Done': ['done', 'finish', 'finished', 'complete', 'completed', 'closed'],
@@ -190,6 +190,7 @@ const setupHandlers = () => {
 
 // Handle one-word reply corrections
 const handleCorrection = async (message, say) => {
+  const app = getApp();
   const text = message.text || '';
   const threadTs = message.thread_ts;
 
@@ -272,6 +273,11 @@ const handleCorrection = async (message, say) => {
       };
       if (notionRecordId && statusUpdaters[currentFiledTo]) {
         await statusUpdaters[currentFiledTo](notionRecordId, { status: parsed.newStatus });
+      }
+
+      // Reactivating via Slack removes the auto-close marker
+      if (parsed.newStatus === 'Active') {
+        await removeReaction(app, message.channel, threadTs, 'checkered_flag');
       }
 
       await say({
