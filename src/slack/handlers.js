@@ -35,7 +35,7 @@ const removeReaction = async (app, channel, timestamp, name) => {
 
 // Status keywords mapping (module-level for reuse)
 const statuses = {
-  'Active': ['active', 'open', 'started', 'progress', 'todo', 'unknown'],
+  'Active': ['active', 'open', 'started', 'progress', 'todo'],
   'Waiting': ['waiting', 'someday', 'pending', 'hold'],
   'Blocked': ['blocked', 'block', 'stuck', 'issue'],
   'Done': ['done', 'finish', 'finished', 'complete', 'completed', 'closed'],
@@ -166,7 +166,7 @@ const setupHandlers = () => {
       });
 
       // Reply with confirmation
-      let replyText = `Filed as ${result.destination}\n\n${result.name}\nConfidence: ${result.confidence.toFixed(2)}`;
+      let replyText = `Filed as ${result.destination}\n\n*${result.name}*\nConfidence: ${result.confidence.toFixed(2)}`;
       if (result.status) {
         replyText += `\nStatus: ${result.status}`;
       }

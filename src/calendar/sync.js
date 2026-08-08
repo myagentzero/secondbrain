@@ -37,6 +37,71 @@ const getSharedCalendarEvents = async (calendar, calendarId, startDateTime, endD
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
+// Read-only fetch of upcoming meetings (Outlook ICS + shared calendar) for the next N days.
+// Unlike runCalendarSync, this does not touch the primary Google Calendar.
+const getUpcomingEvents = async (days) => {
+  const config = getCalendarConfig();
+  if (!config) {
+    console.log('No calendar config found');
+    return [];
+  }
+
+  const auth = await authorize();
+  const calendar = google.calendar({ version: 'v3', auth });
+
+  const startDateTime = new Date();
+  const endDateTime = new Date();
+  endDateTime.setDate(endDateTime.getDate() + days);
+  endDateTime.setHours(23, 59, 0, 0);
+
+  const sharedCalEvents = await getSharedCalendarEvents(
+    calendar, config.sharedCalendarId, startDateTime, endDateTime
+  );
+
+  const icsResponse = await fetchText(config.icsCalendarUrl, {
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36',
+      'Accept': 'text/calendar,text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8'
+    }
+  });
+  const ics = await icsResponse.text();
+
+  const icalExpander = new IcalExpander({ ics, maxIterations: 100 });
+  const events = icalExpander.between(startDateTime, endDateTime);
+
+  const mappedEvents = events.events.map(e => ({
+    start: fixTimeZone(e.startDate),
+    end: fixTimeZone(e.endDate),
+    summary: e.summary,
+    location: e.location
+  }));
+
+  const mappedOccurrences = events.occurrences.map(o => ({
+    start: fixTimeZone(o.startDate),
+    end: fixTimeZone(o.endDate),
+    summary: o.item.summary,
+    location: o.item.location
+  }));
+
+  const allEvents = [].concat(mappedEvents, mappedOccurrences, sharedCalEvents);
+
+  const skipEvents = config.skipEvents || [];
+  const filteredEvents = allEvents.filter(event =>
+    !event.summary.startsWith('Canceled') &&
+    !skipEvents.some(item => event.summary.toLowerCase().includes(item.toLowerCase()))
+  );
+
+  const uniqueEvents = filteredEvents.filter((event, index, self) =>
+    index === self.findIndex(item =>
+      item.summary == event.summary && item.start.dateTime == event.start.dateTime
+    )
+  );
+
+  uniqueEvents.sort((a, b) => new Date(a.start.dateTime) - new Date(b.start.dateTime));
+
+  return uniqueEvents;
+};
+
 const runCalendarSync = async (syncDays) => {
   const config = getCalendarConfig();
   if (!config) {
@@ -200,4 +265,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { runCalendarSync };
+module.exports = { runCalendarSync, getUpcomingEvents };

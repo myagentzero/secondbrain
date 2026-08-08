@@ -93,14 +93,14 @@ For UNCLEAR (confidence below 0.6):
 - A concrete one-off task with a deadline, a named event/meeting, or a clear single deliverable should score 0.8+ confidence as "admin" (or "projects" if it clearly has multiple ongoing steps) — do not default to "needs_review" just because a date or person is present.
 - Status options for people: "Active", "Needs Review"
 - Status options for projects and admin: "Active", "Waiting", "Blocked", "Done"
-- Today's Unix timestamp is {{TODAY}} ({{DAY_OF_WEEK}}). Use this to resolve relative dates like "tomorrow", "next week", "Friday", etc.
+- Today's date is {{TODAY}} {{DAY_OF_WEEK}}. Use this to resolve relative dates like "tomorrow", "next week", "Friday", etc. to help determine due dates.
 - Extract dates when mentioned and format as YYYY-MM-DD. Due date should be a date in the future, otherwise set to null
 - If no clear tags apply, use an empty array []
 - Always return valid JSON with no markdown formatting`;
 
 const categorizeMessage = async (text) => {
   const date = new Date();
-  const today = Math.floor(date.getTime() / 1000);
+  const today = date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'America/Phoenix' });
   const dayOfWeek = date.toLocaleDateString('en-US', { weekday: 'long', timeZone: 'America/Phoenix' });
   const prompt = CATEGORIZATION_PROMPT
     .replace('{{INPUT}}', text)
@@ -154,7 +154,7 @@ const RECLASSIFICATION_PROMPT = `Extract structured data from this text for a {{
 
 CATEGORY: {{CATEGORY}}
 STATUS: {{STATUS}}
-Today's Unix timestamp is {{TODAY}} ({{DAY_OF_WEEK}})
+Today's date is {{TODAY}} {{DAY_OF_WEEK}}
 
 # INSTRUCTIONS
 
@@ -215,7 +215,7 @@ For ADMIN:
 
 const reclassifyMessage = async (text, newCategory, currentStatus) => {
   const dateObj = new Date();
-  const today = Math.floor(dateObj.getTime() / 1000);
+  const today = dateObj.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'America/Phoenix' });
   const dayOfWeek = dateObj.toLocaleDateString('en-US', { weekday: 'long', timeZone: 'America/Phoenix' });
   const prompt = RECLASSIFICATION_PROMPT
     .replace(/{{CATEGORY}}/g, newCategory)
@@ -241,7 +241,7 @@ const DAILY_DIGEST_STRUCTURED_PROMPT = `You are a personal productivity assistan
 
 {{COMPLETED_TASKS}}
 
-Today's Unix timestamp is {{DATE}} ({{DAY_OF_WEEK}})
+Today's date is {{DATE}} {{DAY_OF_WEEK}}
 
 # OUTPUT FORMAT (return ONLY this JSON, no other text)
 {
@@ -272,7 +272,7 @@ Today's Unix timestamp is {{DATE}} ({{DAY_OF_WEEK}})
 
 const generateDailyDigestStructured = async (context, existingTasks = [], completedTasks = []) => {
   const dateObj = new Date();
-  const date = Math.floor(dateObj.getTime() / 1000);
+  const date = dateObj.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'America/Phoenix' });
   const dayOfWeek = dateObj.toLocaleDateString('en-US', { weekday: 'long', timeZone: 'America/Phoenix' });
 
   // Format existing tasks for the prompt
@@ -350,49 +350,49 @@ const formatDigestForSlack = (digest) => {
   return text.trim();
 };
 
-const WEEKLY_DIGEST_PROMPT = `You are a personal productivity assistant conducting a weekly review. Analyze the following data and generate an insightful summary.
+const WEEKLY_DIGEST_PROMPT = `You are a personal productivity assistant. This runs Sunday night, so I'm reviewing the week that just ended AND planning the week ahead. Analyze the following data and generate an insightful summary.
 
 {{CONTEXT}}
-Today's Unix timestamp is {{DATE}} ({{DAY_OF_WEEK}})
+Today's date is {{DATE}} {{DAY_OF_WEEK}}
 TOTAL CAPTURES THIS WEEK: {{TOTAL_CAPTURES}}
 {{COMPLETED_TASKS}}
 
 # INSTRUCTIONS
-Create a weekly review with EXACTLY this format. Keep it under 250 words total.
+Create a weekly review + week-ahead plan with EXACTLY this format. This is posted to Slack, so use concise, actionable language. If a section has no content, skip it entirely.
 
----
+*Week in Review*
 
-**Week in Review**
-
-**Quick Stats:**
+*Quick Stats:*
 - Items captured: [number]
 - Breakdown: [x people, y projects, z ideas, w admin]
 
-**What Moved Forward:**
+*What Moved Forward:*
 - [Project or area that made progress]
 - [Another win or completion]
 
-**Open Loops (needs attention):**
-1. [Something blocked, stalled, or waiting too long]
+*Open Loops (needs attention):*
+1. [Something blocked, stalled, or waiting too long — draw from ACTIVE INBOX ITEMS and open projects]
 2. [Another concern]
 
-**Patterns I Notice:**
+*Needs Review:*
+[List items from the NEEDS REVIEW section that need a decision, with a one-line reason why each is ambiguous. Skip if section is empty, don't make something up.]
+
+*Week Ahead: Meetings to Prep For:*
+[Scan UPCOMING MEETINGS and flag the ones that likely need prep (external meetings, presentations, 1:1s with an open agenda item, anything tied to an active project or admin task) with a one-line prep suggestion each. Skip routine/recurring meetings with nothing to prep.]
+
+*Patterns I Notice:*
 [One observation about themes, recurring topics, or where energy is going]
 
-**Suggested Focus for Next Week:**
-1. [Specific action for highest priority item]
+*Suggested Focus for Next Week:*
+1. [Specific action for highest priority item — ground this in ACTIVE INBOX ITEMS, open projects, and/or upcoming meetings, not a generic suggestion]
 2. [Second priority]
 3. [Third priority]
-
-**Items Needing Review:**
-[List any items still marked "Needs Review" or flag if none]
-
----
 
 # RULES
 - Be analytical, not motivational
 - Call out projects that have not had action in over a week
 - Note if capture volume was unusually high or low
+- Only cite meetings, inbox items, and review items that actually appear, never invent one
 - Suggest concrete next actions, not vague intentions
 - If something looks stuck, say so directly
 - Keep language concise and actionable
@@ -400,7 +400,7 @@ Create a weekly review with EXACTLY this format. Keep it under 250 words total.
 
 const generateWeeklyDigest = async (context, totalCaptures, completedTasks = []) => {
   const dateObj = new Date();
-  const date = Math.floor(dateObj.getTime() / 1000);
+  const date = dateObj.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'America/Phoenix' });
   const dayOfWeek = dateObj.toLocaleDateString('en-US', { weekday: 'long', timeZone: 'America/Phoenix' });
 
   const completedTasksText = completedTasks.length > 0

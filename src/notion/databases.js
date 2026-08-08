@@ -418,6 +418,34 @@ const queryOpenInboxLog = async () => {
   });
 };
 
+// Query active inbox log entries (for weekly planning digest)
+const queryActiveInboxLog = async () => {
+  const { inboxLog } = getDatabaseIds();
+
+  return queryDatabase({
+    database_id: inboxLog,
+    filter: {
+      property: 'Status',
+      select: { equals: 'Active' }
+    },
+    page_size: 50
+  });
+};
+
+// Query inbox log entries needing review (for weekly planning digest)
+const queryNeedsReviewInboxLog = async () => {
+  const { inboxLog } = getDatabaseIds();
+
+  return queryDatabase({
+    database_id: inboxLog,
+    filter: {
+      property: 'Status',
+      select: { equals: 'Needs Review' }
+    },
+    page_size: 50
+  });
+};
+
 // Query all records from a database (with pagination)
 const queryAllRecordsFromDatabase = async (databaseId, pageSize = 100) => {
   const allResults = [];
@@ -474,6 +502,8 @@ module.exports = {
   queryWeekInboxLog,
   queryAllOpenProjects,
   queryOpenInboxLog,
+  queryActiveInboxLog,
+  queryNeedsReviewInboxLog,
   queryAllRecordsFromDatabase,
   queryAllInboxLogRecordIds
 };
