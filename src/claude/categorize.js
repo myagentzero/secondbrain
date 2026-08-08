@@ -358,7 +358,7 @@ const formatDigestForSlack = (digest) => {
   return text.trim();
 };
 
-const WEEKLY_DIGEST_PROMPT = `You are a personal productivity assistant. This runs Sunday night, so I'm reviewing the week that just ended AND planning the week ahead. Analyze the following data and generate an insightful summary.
+const WEEKLY_DIGEST_PROMPT = `You are a personal productivity assistant. This runs Sunday night, so review the week that just ended AND plan the week ahead. Analyze the following data and generate an insightful summary.
 
 {{CONTEXT}}
 {{COMPLETED_TASKS}}
@@ -366,7 +366,7 @@ const WEEKLY_DIGEST_PROMPT = `You are a personal productivity assistant. This ru
 Today's date is {{DATE}} {{DAY_OF_WEEK}}
 
 # INSTRUCTIONS
-Create a weekly review + week-ahead plan with EXACTLY this format, using standard markdown (# / ## headers, - bullets, 1. numbered lists, **bold**). Use concise, actionable language. If a section has no content, skip it entirely.
+Create a weekly review + week-ahead plan with this format:
 
 # Week in Review
 
@@ -400,6 +400,7 @@ Create a weekly review + week-ahead plan with EXACTLY this format, using standar
 - Flag projects whose Last Touched date is more than a week old, and admin tasks whose Created date is more than a week old — both indicate no recent action
 - Note if capture volume in CAPTURE SUMMARY was unusually high or low
 - Only cite meetings, projects, admin tasks, and review items that actually appear, never invent one
+- If a section has no content, skip it entirely.
 - Suggest concrete next actions, not vague intentions
 - If something looks stuck, say so directly
 - Keep language concise and actionable
@@ -422,7 +423,7 @@ const generateWeeklyDigest = async (context, completedTasks = []) => {
 
   const response = await createMessage({
     model: getModel(),
-    maxTokens: 4096,
+    maxTokens: 8192,
     messages: [{ role: 'user', content: prompt }]
   });
 
