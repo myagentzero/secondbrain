@@ -166,7 +166,7 @@ const setupHandlers = () => {
       });
 
       // Reply with confirmation
-      let replyText = `Filed as ${result.destination}\n\n**${result.name}**\nConfidence: ${result.confidence.toFixed(2)}`;
+      let replyText = `Filed as ${result.destination}\n\n${result.name}\nConfidence: ${result.confidence.toFixed(2)}`;
       if (result.status) {
         replyText += `\nStatus: ${result.status}`;
       }
@@ -220,6 +220,7 @@ const handleCorrection = async (message, say) => {
 
     const originalText = inboxLogEntry.properties?.['Original Text']?.title?.[0]?.plain_text || '';
     const currentFiledTo = inboxLogEntry.properties?.['Filed-To']?.select?.name || '';
+    const currentStatus = inboxLogEntry.properties?.['Status']?.select?.name || '';
     const notionRecordId = inboxLogEntry.properties?.['Notion Record ID']?.rich_text?.[0]?.plain_text || '';
 
     // Handle destination change
@@ -235,22 +236,31 @@ const handleCorrection = async (message, say) => {
         }
       }
 
+      // A category update on a "Needs Review" item resolves the review → Active
+      const resolvedStatus = currentStatus === 'Needs Review' ? 'Active' : null;
+
       // Get new classification from Claude
-      const reclassified = await reclassifyMessage(originalText, parsed.newDestination, 'Active');
+      const reclassified = await reclassifyMessage(originalText, parsed.newDestination, resolvedStatus || 'Active');
 
       // Create new entry in destination database
       const destEntry = await createDestinationEntry(parsed.newDestination, reclassified);
 
       // Update inbox log
-      await updateInboxLogEntry(inboxLogEntry.id, {
+      const inboxUpdates = {
         filedTo: parsed.newDestination,
         destinationName: reclassified.name,
         destinationUrl: destEntry ? destEntry.url : null,
         notionRecordId: destEntry ? destEntry.id : null
-      });
+      };
+      if (resolvedStatus) {
+        inboxUpdates.status = resolvedStatus;
+      }
+      await updateInboxLogEntry(inboxLogEntry.id, inboxUpdates);
 
       await say({
-        text: `Destination updated to ${parsed.newDestination}`,
+        text: resolvedStatus
+          ? `Destination updated to ${parsed.newDestination} (status set to ${resolvedStatus})`
+          : `Destination updated to ${parsed.newDestination}`,
         thread_ts: threadTs
       });
       return;
