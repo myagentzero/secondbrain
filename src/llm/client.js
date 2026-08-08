@@ -183,7 +183,9 @@ const createMessage = async ({ model, maxTokens, messages }) => {
   if (!isHealthy) {
     console.log('Primary LLM health check failed, falling back to secondary');
     if (cfg.fallbackEnabled && cfg.secondary) {
-      return callSecondary({ model, maxTokens, messages });
+      // Don't forward `model` here — it's the primary's model name (from
+      // getModel()) and may not exist on the secondary provider.
+      return callSecondary({ maxTokens, messages });
     }
     throw new Error('Primary LLM unavailable and no fallback configured');
   }
@@ -194,7 +196,7 @@ const createMessage = async ({ model, maxTokens, messages }) => {
   } catch (error) {
     if (cfg.fallbackEnabled && cfg.secondary && shouldFallback(error)) {
       console.log(`Primary LLM failed (${error.code || error.status || error.message}), falling back to secondary`);
-      return callSecondary({ model, maxTokens, messages });
+      return callSecondary({ maxTokens, messages });
     }
     throw error;
   }

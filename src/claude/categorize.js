@@ -1,5 +1,17 @@
 const { createMessage, getModel } = require('../llm/client');
 
+// LLM responses can occasionally come back malformed (empty content, no text
+// block) when a provider hiccups. Extracting through one helper means every
+// call site gets a clear error instead of a raw "Cannot read properties of
+// undefined" and callers can decide how to fail soft.
+const extractResponseText = (response) => {
+  const text = response?.content?.[0]?.text;
+  if (typeof text !== 'string') {
+    throw new Error(`LLM response missing text content: ${JSON.stringify(response)?.slice(0, 500)}`);
+  }
+  return text;
+};
+
 const CATEGORIZATION_PROMPT = `# INPUT
 {{INPUT}}
 
@@ -113,7 +125,7 @@ const categorizeMessage = async (text) => {
     messages: [{ role: 'user', content: prompt }]
   });
 
-  const aiResponse = response.content[0].text;
+  const aiResponse = extractResponseText(response);
   return parseCategorizationResponse(aiResponse);
 };
 
@@ -230,7 +242,7 @@ const reclassifyMessage = async (text, newCategory, currentStatus) => {
     messages: [{ role: 'user', content: prompt }]
   });
 
-  const aiResponse = response.content[0].text;
+  const aiResponse = extractResponseText(response);
   return parseCategorizationResponse(aiResponse);
 };
 
@@ -298,16 +310,12 @@ const generateDailyDigestStructured = async (context, existingTasks = [], comple
     messages: [{ role: 'user', content: prompt }]
   });
 
-  const aiResponse = response.content[0].text;
-
-  // Remove markdown code blocks if present
-  let cleaned = aiResponse.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-
   try {
+    const aiResponse = extractResponseText(response);
+    const cleaned = aiResponse.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
     return JSON.parse(cleaned);
   } catch (e) {
     console.error('Failed to parse structured digest:', e.message);
-    console.error('Raw response was:', aiResponse);
     return {
       newTasks: [],
       peopleToConnect: [],
@@ -420,7 +428,7 @@ const generateWeeklyDigest = async (context, totalCaptures, completedTasks = [])
     messages: [{ role: 'user', content: prompt }]
   });
 
-  return response.content[0].text;
+  return extractResponseText(response);
 };
 
 const TASK_COMPLETION_MATCH_PROMPT = `You are matching completed Google Tasks against open inbox items from a personal productivity system.
@@ -477,10 +485,9 @@ const matchCompletedTasksToInbox = async (completedTasks, inboxItems) => {
     messages: [{ role: 'user', content: prompt }]
   });
 
-  const aiResponse = response.content[0].text;
-  let cleaned = aiResponse.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-
   try {
+    const aiResponse = extractResponseText(response);
+    const cleaned = aiResponse.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
     return JSON.parse(cleaned);
   } catch (e) {
     console.error('Failed to parse task completion matches:', e.message);
