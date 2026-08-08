@@ -29,13 +29,13 @@ const memoryStore = (key, content, category) => {
 const buildDailyContext = (projects, people, admin, upcomingAdmin, keyAlert = null) => {
   let context = '';
   if (projects.results.length > 0) {
-    context += 'ACTIVE PROJECTS:\n';
+    context += '## ACTIVE PROJECTS\n';
     projects.results.forEach((p, i) => {
       const name = p.properties?.Name?.title?.[0]?.plain_text || 'Untitled';
       const status = p.properties?.Status?.select?.name || 'Unknown';
       const nextAction = p.properties?.['Next Action']?.rich_text?.[0]?.plain_text || 'None specified';
 
-      context += ` ${i + 1}. ${name}\n`;
+      context += `${i + 1}. ${name}\n`;
       context += `   Status: ${status}\n`;
       context += `   Next Action: ${nextAction}\n\n`;
     });
@@ -50,12 +50,12 @@ const buildDailyContext = (projects, people, admin, upcomingAdmin, keyAlert = nu
     const followUp = p.properties?.['Follow-ups']?.rich_text?.[0]?.plain_text || 'None';
 
     personCount++;
-    peopleSection += ` ${personCount}. ${name}\n`;
+    peopleSection += `${personCount}. ${name}\n`;
     peopleSection += `   Status: ${status}\n`;
     peopleSection += `   Follow-up: ${followUp}\n\n`;
   });
   if (personCount > 0) {
-    context += 'PEOPLE TO FOLLOW UP WITH:\n';
+    context += '## PEOPLE TO FOLLOW UP WITH\n';
     context += peopleSection;
   }
 
@@ -64,13 +64,13 @@ const buildDailyContext = (projects, people, admin, upcomingAdmin, keyAlert = nu
   const hasAdminTasks = admin.results.length > 0;
 
   if (hasKeyAlert || hasAdminTasks) {
-    context += 'TASKS DUE:\n';
+    context += '## TASKS DUE\n';
     let taskIndex = 0;
 
     // Key expiration alert first (highest priority)
     if (hasKeyAlert) {
       taskIndex++;
-      context += ` ${taskIndex}. ${keyAlert.name} [URGENT]\n`;
+      context += `${taskIndex}. ${keyAlert.name} [URGENT]\n`;
       context += `   Due: ${keyAlert.dueDate}\n`;
       context += `   Notes: ${keyAlert.notes}\n\n`;
     }
@@ -82,7 +82,7 @@ const buildDailyContext = (projects, people, admin, upcomingAdmin, keyAlert = nu
       const dueDate = a.properties?.['Due Date']?.date?.start || 'No date';
       const notes = a.properties?.Notes?.rich_text?.[0]?.plain_text || '';
 
-      context += ` ${taskIndex}. ${name}\n`;
+      context += `${taskIndex}. ${name}\n`;
       context += `   Due: ${dueDate}\n`;
       if (notes) {
         context += `   Notes: ${notes}\n`;
@@ -93,13 +93,13 @@ const buildDailyContext = (projects, people, admin, upcomingAdmin, keyAlert = nu
 
   // Build upcoming tasks section
   if (upcomingAdmin.results.length > 0) {
-    context += 'UPCOMING TASKS (Next Week):\n';
+    context += '## UPCOMING TASKS (Next Week)\n';
     upcomingAdmin.results.forEach((a, i) => {
       const name = a.properties?.Name?.title?.[0]?.plain_text || 'Untitled';
       const dueDate = a.properties?.['Due Date']?.date?.start || 'No date';
       const notes = a.properties?.Notes?.rich_text?.[0]?.plain_text || '';
 
-      context += ` ${i + 1}. ${name}\n`;
+      context += `${i + 1}. ${name}\n`;
       context += `   Due: ${dueDate}\n`;
       if (notes) {
         context += `   Notes: ${notes}\n`;

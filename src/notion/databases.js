@@ -401,6 +401,20 @@ const queryAllOpenProjects = async () => {
   });
 };
 
+// Query all active admin tasks (for weekly digest)
+const queryAllOpenAdmin = async () => {
+  const { admin } = getDatabaseIds();
+
+  return queryDatabase({
+    database_id: admin,
+    filter: {
+      property: 'Status', select: { equals: 'Active' }
+    },
+    page_size: 30,
+    sorts: [{ property: 'Due Date', direction: 'ascending' }]
+  });
+};
+
 // Query open inbox log entries (Active, Waiting, or Blocked)
 const queryOpenInboxLog = async () => {
   const { inboxLog } = getDatabaseIds();
@@ -415,20 +429,6 @@ const queryOpenInboxLog = async () => {
       ]
     },
     page_size: 100
-  });
-};
-
-// Query active inbox log entries (for weekly planning digest)
-const queryActiveInboxLog = async () => {
-  const { inboxLog } = getDatabaseIds();
-
-  return queryDatabase({
-    database_id: inboxLog,
-    filter: {
-      property: 'Status',
-      select: { equals: 'Active' }
-    },
-    page_size: 50
   });
 };
 
@@ -501,8 +501,8 @@ module.exports = {
   queryUpcomingAdmin,
   queryWeekInboxLog,
   queryAllOpenProjects,
+  queryAllOpenAdmin,
   queryOpenInboxLog,
-  queryActiveInboxLog,
   queryNeedsReviewInboxLog,
   queryAllRecordsFromDatabase,
   queryAllInboxLogRecordIds

@@ -361,65 +361,63 @@ const formatDigestForSlack = (digest) => {
 const WEEKLY_DIGEST_PROMPT = `You are a personal productivity assistant. This runs Sunday night, so I'm reviewing the week that just ended AND planning the week ahead. Analyze the following data and generate an insightful summary.
 
 {{CONTEXT}}
-Today's date is {{DATE}} {{DAY_OF_WEEK}}
-TOTAL CAPTURES THIS WEEK: {{TOTAL_CAPTURES}}
 {{COMPLETED_TASKS}}
 
+Today's date is {{DATE}} {{DAY_OF_WEEK}}
+
 # INSTRUCTIONS
-Create a weekly review + week-ahead plan with EXACTLY this format. This is posted to Slack, so use concise, actionable language. If a section has no content, skip it entirely.
+Create a weekly review + week-ahead plan with EXACTLY this format, using standard markdown (# / ## headers, - bullets, 1. numbered lists, **bold**). Use concise, actionable language. If a section has no content, skip it entirely.
 
-*Week in Review*
+# Week in Review
 
-*Quick Stats:*
-- Items captured: [number]
-- Breakdown: [x people, y projects, z ideas, w admin]
+## Quick Stats
+[Pull directly from CAPTURE SUMMARY — total captures and the per-category breakdown]
 
-*What Moved Forward:*
-- [Project or area that made progress]
+## What Moved Forward
+- [A project from ACTIVE PROJECTS STATUS with a recent Last Touched date, or a completed item from COMPLETED TASKS LAST WEEK]
 - [Another win or completion]
 
-*Open Loops (needs attention):*
-1. [Something blocked, stalled, or waiting too long — draw from ACTIVE INBOX ITEMS and open projects]
+## Open Loops (needs attention)
+1. [Something blocked, stalled, or waiting too long — draw from ACTIVE PROJECTS STATUS and ACTIVE ADMIN TASKS]
 2. [Another concern]
 
-*Needs Review:*
+## Needs Review
 [List items from the NEEDS REVIEW section that need a decision, with a one-line reason why each is ambiguous. Skip if section is empty, don't make something up.]
 
-*Week Ahead: Meetings to Prep For:*
-[Scan UPCOMING MEETINGS and flag the ones that likely need prep (external meetings, presentations, 1:1s with an open agenda item, anything tied to an active project or admin task) with a one-line prep suggestion each. Skip routine/recurring meetings with nothing to prep.]
+## Week Ahead: Meetings to Prep For
+[Scan UPCOMING MEETINGS THIS WEEK and flag the ones that likely need prep (external meetings, presentations, 1:1s with an open agenda item, anything tied to an active project or admin task) with a one-line prep suggestion each. Skip routine/recurring meetings with nothing to prep.]
 
-*Patterns I Notice:*
-[One observation about themes, recurring topics, or where energy is going]
+## Patterns I Notice
+[One observation about themes, recurring topics, or where energy is going, drawn from ITEMS CAPTURED LAST WEEK and CAPTURE SUMMARY]
 
-*Suggested Focus for Next Week:*
-1. [Specific action for highest priority item — ground this in ACTIVE INBOX ITEMS, open projects, and/or upcoming meetings, not a generic suggestion]
+## Suggested Focus for Next Week
+1. [Specific action for highest priority item — ground this in ACTIVE PROJECTS STATUS, ACTIVE ADMIN TASKS, and/or UPCOMING MEETINGS THIS WEEK, not a generic suggestion]
 2. [Second priority]
 3. [Third priority]
 
 # RULES
 - Be analytical, not motivational
-- Call out projects that have not had action in over a week
-- Note if capture volume was unusually high or low
-- Only cite meetings, inbox items, and review items that actually appear, never invent one
+- Flag projects whose Last Touched date is more than a week old, and admin tasks whose Created date is more than a week old — both indicate no recent action
+- Note if capture volume in CAPTURE SUMMARY was unusually high or low
+- Only cite meetings, projects, admin tasks, and review items that actually appear, never invent one
 - Suggest concrete next actions, not vague intentions
 - If something looks stuck, say so directly
 - Keep language concise and actionable
 - Use emojis sparingly for emphasis, not decoration`;
 
-const generateWeeklyDigest = async (context, totalCaptures, completedTasks = []) => {
+const generateWeeklyDigest = async (context, completedTasks = []) => {
   const dateObj = new Date();
   const date = dateObj.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'America/Phoenix' });
   const dayOfWeek = dateObj.toLocaleDateString('en-US', { weekday: 'long', timeZone: 'America/Phoenix' });
 
   const completedTasksText = completedTasks.length > 0
-    ? '\nCOMPLETED TASKS THIS WEEK:\n' + completedTasks.map(t => ` - ${t.title}`).join('\n')
+    ? '\n## COMPLETED TASKS LAST WEEK\n' + completedTasks.map(t => `- ${t.title}`).join('\n')
     : '';
 
   const prompt = WEEKLY_DIGEST_PROMPT
     .replace('{{CONTEXT}}', context)
     .replace('{{DATE}}', date)
     .replace('{{DAY_OF_WEEK}}', dayOfWeek)
-    .replace('{{TOTAL_CAPTURES}}', totalCaptures.toString())
     .replace('{{COMPLETED_TASKS}}', completedTasksText);
 
   const response = await createMessage({
