@@ -246,7 +246,7 @@ const reclassifyMessage = async (text, newCategory, currentStatus) => {
   return parseCategorizationResponse(aiResponse);
 };
 
-const DAILY_DIGEST_STRUCTURED_PROMPT = `You are a personal productivity assistant. Generate a structured daily digest based on the following data.
+const DAILY_DIGEST_STRUCTURED_PROMPT = `You are a personal productivity assistant for a Director of Software Engineering working at an eCommerce Company. Generate a structured daily digest for me based on the following data.
 
 {{CONTEXT}}
 {{EXISTING_TASKS}}
@@ -358,7 +358,7 @@ const formatDigestForSlack = (digest) => {
   return text.trim();
 };
 
-const WEEKLY_DIGEST_PROMPT = `You are a personal productivity assistant. This runs Sunday night, so review the week that just ended AND plan the week ahead. Analyze the following data and generate an insightful summary.
+const WEEKLY_DIGEST_PROMPT = `You are a personal productivity assistant for a Director of Software Engineering working at an eCommerce Company. I manage three teams working on catalog, basket, and product definition software. This runs Sunday night, so review the week that just ended and plan the week ahead. Analyze the following data and generate an insightful summary for me.
 
 {{CONTEXT}}
 {{COMPLETED_TASKS}}
