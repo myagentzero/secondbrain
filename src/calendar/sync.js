@@ -13,6 +13,35 @@ const fetchText = async (url, options) => {
   return fetch(url, options);
 };
 
+const getIcalEvents = (ics, startDateTime, endDateTime) => {
+  const normalizedIcs = ics.trimStart();
+  if (!normalizedIcs.startsWith('BEGIN:VCALENDAR') || !normalizedIcs.includes('END:VCALENDAR')) {
+    throw new Error('ICS feed did not return a valid VCALENDAR document');
+  }
+
+  try {
+    const icalExpander = new IcalExpander({ ics: normalizedIcs, maxIterations: 100 });
+    return icalExpander.between(startDateTime, endDateTime);
+  } catch (err) {
+    throw new Error(`Unable to parse ICS feed: ${err.message}`);
+  }
+};
+
+const downloadIcs = async (url) => {
+  const response = await fetchText(url, {
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36',
+      'Accept': 'text/calendar,text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8'
+    }
+  });
+
+  if (!response.ok) {
+    throw new Error(`ICS feed request failed with HTTP ${response.status}`);
+  }
+
+  return response.text();
+};
+
 const COLOR_ID = 8;
 
 const getSharedCalendarEvents = async (calendar, calendarId, startDateTime, endDateTime) => {
@@ -58,16 +87,8 @@ const getUpcomingEvents = async (days) => {
     calendar, config.sharedCalendarId, startDateTime, endDateTime
   );
 
-  const icsResponse = await fetchText(config.icsCalendarUrl, {
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36',
-      'Accept': 'text/calendar,text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8'
-    }
-  });
-  const ics = await icsResponse.text();
-
-  const icalExpander = new IcalExpander({ ics, maxIterations: 100 });
-  const events = icalExpander.between(startDateTime, endDateTime);
+  const ics = await downloadIcs(config.icsCalendarUrl);
+  const events = getIcalEvents(ics, startDateTime, endDateTime);
 
   const mappedEvents = events.events.map(e => ({
     start: fixTimeZone(e.startDate),
@@ -125,16 +146,8 @@ const runCalendarSync = async (syncDays) => {
 
   // Download and parse ICS file
   console.log('Downloading ics file...');
-  const icsResponse = await fetchText(config.icsCalendarUrl, {
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36',
-      'Accept': 'text/calendar,text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8'
-    }
-  });
-  const ics = await icsResponse.text();
-
-  const icalExpander = new IcalExpander({ ics, maxIterations: 100 });
-  const events = icalExpander.between(startDateTime, endDateTime);
+  const ics = await downloadIcs(config.icsCalendarUrl);
+  const events = getIcalEvents(ics, startDateTime, endDateTime);
 
   const mappedEvents = events.events.map(e => ({
     start: fixTimeZone(e.startDate),

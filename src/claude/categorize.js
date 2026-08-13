@@ -270,17 +270,20 @@ Today's date is {{DATE}} {{DAY_OF_WEEK}}
 }
 
 # RULES
-- Be specific and actionable, not motivational
-- "Work on website" is bad. "Email Sarah to confirm deadline" is a good task
-- Prioritize TASKS DUE and ACTIVE PROJECTS based on concrete actions for newTasks
 - Keep notes brief (under 150 characters)
-- There can be fewer than 3 newTasks, that's fine
-- Do not suggest newTasks that duplicate what is already captured in existing or completed tasks
-- If no newTasks, use empty array []
 - If no peopleToConnect, use empty array []
 - If nothing to watch out for, use null
 - If no small win to note, use null
-- Always return valid JSON with no markdown formatting`;
+- Always return valid JSON with no markdown formatting
+
+For newTasks:
+- Be specific and actionable, not motivational
+- "Work on website" is bad. "Email Sarah to confirm deadline" is a good task
+- Prioritize TASKS DUE and ACTIVE PROJECTS based on concrete actions
+- There can be fewer than 3 newTasks, that's fine
+- Do not suggest newTasks that duplicate what is already captured in existing existing tasks
+- Do not reopen completed tasks as new tasks
+- If no newTasks, use empty array []`;
 
 const generateDailyDigestStructured = async (context, existingTasks = [], completedTasks = []) => {
   const dateObj = new Date();
