@@ -1,12 +1,19 @@
 const Anthropic = require('@anthropic-ai/sdk');
 const OpenAI = require('openai');
-const { getLLMConfig, getAnthropicConfig, getLLMUserAgent } = require('../config');
+const { getLLMConfig, getLLMUserAgent } = require('../config');
 
 let primaryClient = null;
 let secondaryClient = null;
 let config = null;
 
 const USER_AGENT = getLLMUserAgent();
+
+// Models per task type, shared by the primary and secondary providers.
+// Set `llm.models` ({ categorize, digest }) in credentials.json to override.
+const DEFAULT_MODELS = {
+  categorize: 'claude-haiku-4-5-20251001',
+  digest: 'claude-sonnet-5-5'
+};
 
 const FALLBACK_ERRORS = [
   'ECONNREFUSED',
@@ -19,22 +26,7 @@ const FALLBACK_ERRORS = [
 const loadConfig = () => {
   if (config) return config;
 
-  try {
-    config = getLLMConfig();
-  } catch (e) {
-    // Fall back to legacy anthropic config
-    const anthropicConfig = getAnthropicConfig();
-    config = {
-      primary: null,
-      secondary: {
-        type: 'anthropic',
-        apiKey: anthropicConfig.apiKey,
-        model: anthropicConfig.model
-      },
-      fallbackEnabled: false
-    };
-  }
-
+  config = getLLMConfig();
   return config;
 };
 
@@ -142,7 +134,7 @@ const callPrimary = async ({ model, maxTokens, messages }) => {
   const cfg = loadConfig();
 
   const response = await client.chat.completions.create({
-    model: model || cfg.primary.model,
+    model,
     max_tokens: maxTokens,
     messages: messages.map(m => ({
       role: m.role,
@@ -155,10 +147,9 @@ const callPrimary = async ({ model, maxTokens, messages }) => {
 
 const callSecondary = async ({ model, maxTokens, messages }) => {
   const client = getSecondaryClient();
-  const cfg = loadConfig();
 
   const response = await client.messages.create({
-    model: model || cfg.secondary.model,
+    model,
     max_tokens: maxTokens,
     messages
   });
@@ -183,9 +174,7 @@ const createMessage = async ({ model, maxTokens, messages }) => {
   if (!isHealthy) {
     console.log('Primary LLM health check failed, falling back to secondary');
     if (cfg.fallbackEnabled && cfg.secondary) {
-      // Don't forward `model` here — it's the primary's model name (from
-      // getModel()) and may not exist on the secondary provider.
-      return callSecondary({ maxTokens, messages });
+      return callSecondary({ model, maxTokens, messages });
     }
     throw new Error('Primary LLM unavailable and no fallback configured');
   }
@@ -196,18 +185,17 @@ const createMessage = async ({ model, maxTokens, messages }) => {
   } catch (error) {
     if (cfg.fallbackEnabled && cfg.secondary && shouldFallback(error)) {
       console.log(`Primary LLM failed (${error.code || error.status || error.message}), falling back to secondary`);
-      return callSecondary({ maxTokens, messages });
+      return callSecondary({ model, maxTokens, messages });
     }
     throw error;
   }
 };
 
-const getModel = () => {
+// `purpose` is 'categorize' or 'digest'. The same model is used whether the
+// primary or secondary provider ends up serving the request.
+const getModel = (purpose) => {
   const cfg = loadConfig();
-  if (cfg.primary) {
-    return cfg.primary.model;
-  }
-  return cfg.secondary.model;
+  return cfg.models?.[purpose] || DEFAULT_MODELS[purpose];
 };
 
 const checkKeyExpiration = async () => {

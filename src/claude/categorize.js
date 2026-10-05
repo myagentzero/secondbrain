@@ -23,7 +23,7 @@ const categorizeMessage = async (text) => {
   const prompt = buildCategorizationPrompt(text);
 
   const response = await createMessage({
-    model: getModel(),
+    model: getModel('categorize'),
     maxTokens: 2048,
     messages: [{ role: 'user', content: prompt }]
   });
@@ -67,7 +67,7 @@ const reclassifyMessage = async (text, newCategory, currentStatus) => {
   const prompt = buildReclassificationPrompt(text, newCategory, currentStatus);
 
   const response = await createMessage({
-    model: getModel(),
+    model: getModel('categorize'),
     maxTokens: 2048,
     messages: [{ role: 'user', content: prompt }]
   });
@@ -80,7 +80,7 @@ const generateDailyDigestStructured = async (context, existingTasks = [], comple
   const prompt = buildDailyDigestPrompt(context, existingTasks, completedTasks);
 
   const response = await createMessage({
-    model: getModel(),
+    model: getModel('digest'),
     maxTokens: 4096,
     messages: [{ role: 'user', content: prompt }]
   });
@@ -137,7 +137,7 @@ const generateWeeklyDigest = async (context, completedTasks = []) => {
   const prompt = buildWeeklyDigestPrompt(context, completedTasks);
 
   const response = await createMessage({
-    model: getModel(),
+    model: getModel('digest'),
     maxTokens: 8192,
     messages: [{ role: 'user', content: prompt }]
   });
@@ -163,7 +163,7 @@ const matchCompletedTasksToInbox = async (completedTasks, inboxItems) => {
   const prompt = buildTaskMatchPrompt(tasksText, itemsText);
 
   const response = await createMessage({
-    model: getModel(),
+    model: getModel('categorize'),
     maxTokens: 4096,
     messages: [{ role: 'user', content: prompt }]
   });

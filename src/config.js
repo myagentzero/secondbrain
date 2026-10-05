@@ -39,14 +39,6 @@ const getNotionConfig = () => {
   return cfg.notion;
 };
 
-const getAnthropicConfig = () => {
-  const cfg = loadConfig();
-  if (!cfg.anthropic) {
-    throw new Error('Anthropic configuration not found in credentials.json');
-  }
-  return cfg.anthropic;
-};
-
 const getLLMConfig = () => {
   const cfg = loadConfig();
   if (!cfg.llm) {
@@ -66,7 +58,6 @@ module.exports = {
   getCalendarConfig,
   getSlackConfig,
   getNotionConfig,
-  getAnthropicConfig,
   getLLMConfig,
   getLLMUserAgent
 };

@@ -63,7 +63,7 @@ A self-hosted productivity system that captures thoughts from Slack, categorizes
 
 1. Go to https://console.anthropic.com/
 2. Create an API key
-3. Copy to `credentials.json` under `anthropic.apiKey`
+3. Copy to `credentials.json` under `llm.secondary.apiKey`
 
 ## Running
 
