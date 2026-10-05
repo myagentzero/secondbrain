@@ -9,7 +9,8 @@
     "weekly": "node src/digests/weekly.js",
     "maintenance": "node src/digests/maintenance.js",
     "sync": "node src/calendar/sync.js",
-    "gws-calendar": "node src/cli.js"
+    "gws-calendar": "node src/cli.js",
+    "test": "node --test \"test/**/*.test.js\""
   },
   "author": "myagentzero",
   "license": "ISC",
@@ -17,14 +18,17 @@
     "type": "git",
     "url": "git+https://github.com/myagentzero/secondbrain.git"
   },
+  "engines": {
+    "node": ">=22"
+  },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.92.0",
-    "@notionhq/client": "^5.20.0",
-    "@slack/bolt": "^4.6.0",
-    "googleapis": "^171.4.0",
+    "@anthropic-ai/sdk": "^0.131.0",
+    "@notionhq/client": "^5.27.0",
+    "@slack/bolt": "^5.1.0",
+    "googleapis": "^183.0.0",
     "ical-expander": "^3.2.0",
-    "node-cron": "^4.2.1",
+    "node-cron": "^4.6.0",
     "node-fetch": "^3.3.2",
-    "openai": "^6.33.0"
+    "openai": "^7.28.0"
   }
 }
