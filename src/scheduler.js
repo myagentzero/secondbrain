@@ -38,8 +38,8 @@ const startScheduler = () => {
     timezone: 'America/Phoenix'
   });
 
-  // Weekly orphan cleanup + digest at 5:00 PM on Sunday
-  weeklyJob = cron.schedule('0 17 * * 0', async () => {
+  // Weekly orphan cleanup + digest at 8:00 PM on Sunday
+  weeklyJob = cron.schedule('0 20 * * 0', async () => {
     console.log('Running scheduled weekly orphan cleanup and digest...');
     try {
       await runWeeklyOrphanCleanup();
@@ -89,9 +89,9 @@ const startScheduler = () => {
   });
 
   console.log('Scheduler started:');
-  console.log('  - Daily maintenance: 4:30 AM Phoenix time (Every day)');
-  console.log('  - Daily digest: 5:00 AM Phoenix time (Mon-Fri)');
-  console.log('  - Weekly orphan cleanup + digest: Sunday 5:00 PM Phoenix time');
+  console.log('  - Daily maintenance: 4:30 AM (Every day)');
+  console.log('  - Daily digest: 5:00 AM (Mon-Fri)');
+  console.log('  - Weekly orphan cleanup + digest: Sunday 8:00 PM');
   console.log('  - Calendar sync: Weekdays 7am-3pm hourly (1 day ahead)');
   console.log('  - Calendar sync: Mon-Thu 4pm (2 days ahead)');
   console.log('  - Calendar sync: Friday 4pm (4 days ahead)');
