@@ -109,6 +109,9 @@ const shouldFallback = (error) => {
 };
 
 const normalizeOpenAIResponse = (response) => {
+  if (response.choices[0].finish_reason === 'length') {
+    console.warn('LLM response was cut off at the token limit (primary provider)');
+  }
   return {
     content: [{
       text: response.choices[0].message.content
@@ -122,6 +125,9 @@ const normalizeOpenAIResponse = (response) => {
 };
 
 const normalizeAnthropicResponse = (response) => {
+  if (response.stop_reason === 'max_tokens') {
+    console.warn('LLM response was cut off at the token limit (secondary provider)');
+  }
   return {
     content: response.content,
     model: response.model,
@@ -131,7 +137,6 @@ const normalizeAnthropicResponse = (response) => {
 
 const callPrimary = async ({ model, maxTokens, messages }) => {
   const client = getPrimaryClient();
-  const cfg = loadConfig();
 
   const response = await client.chat.completions.create({
     model,

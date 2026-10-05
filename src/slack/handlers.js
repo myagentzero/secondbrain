@@ -35,7 +35,7 @@ const removeReaction = async (app, channel, timestamp, name) => {
 
 // Status keywords mapping (module-level for reuse)
 const statuses = {
-  'Active': ['active', 'open', 'started', 'progress', 'todo'],
+  'Active': ['active', 'open', 'started', 'progress'],
   'Waiting': ['waiting', 'someday', 'pending', 'hold'],
   'Blocked': ['blocked', 'block', 'stuck', 'issue'],
   'Done': ['done', 'finish', 'finished', 'complete', 'completed', 'closed'],
@@ -108,6 +108,9 @@ const setupHandlers = () => {
   app.message(async ({ message, say }) => {
     // Skip bot messages
     if (message.bot_id) return;
+
+    // Skip edits, deletions, joins, etc.; only plain user messages (and file shares) are captures
+    if (message.subtype && message.subtype !== 'file_share') return;
 
     const text = message.text || '';
     const lowerText = text.toLowerCase().trim();
@@ -227,15 +230,6 @@ const handleCorrection = async (message, say) => {
     if (parsed.newDestination) {
       console.log(`Re-categorizing to ${parsed.newDestination}`);
 
-      // Archive old destination entry if it exists
-      if (notionRecordId) {
-        try {
-          await archivePage(notionRecordId);
-        } catch (e) {
-          console.log('Could not archive old entry:', e.message);
-        }
-      }
-
       // A category update on a "Needs Review" item resolves the review → Active
       const resolvedStatus = currentStatus === 'Needs Review' ? 'Active' : null;
 
@@ -256,6 +250,15 @@ const handleCorrection = async (message, say) => {
         inboxUpdates.status = resolvedStatus;
       }
       await updateInboxLogEntry(inboxLogEntry.id, inboxUpdates);
+
+      // Archive the old destination entry last, so a failure above leaves it intact
+      if (notionRecordId) {
+        try {
+          await archivePage(notionRecordId);
+        } catch (e) {
+          console.log('Could not archive old entry:', e.message);
+        }
+      }
 
       await say({
         text: resolvedStatus

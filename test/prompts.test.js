@@ -68,3 +68,19 @@ test('prompts stay compact', () => {
     p.buildWeeklyDigestPrompt('', [], NOW)
   ]) assert.ok(out.length < 4000, `prompt is ${out.length} chars`);
 });
+
+test('digest prompts use the configured name, with a fallback and no leftover placeholders', () => {
+  for (const build of [
+    (name) => p.buildDailyDigestPrompt('c', [], [], NOW, name),
+    (name) => p.buildWeeklyDigestPrompt('c', [], NOW, name)
+  ]) {
+    const named = build('Bryan');
+    assert.ok(named.includes('Bryan is a Director of Engineering'));
+    assert.ok(!named.includes('the user'));
+    noPlaceholders(named);
+
+    const fallback = build(undefined);
+    assert.ok(fallback.includes('The user is a Director of Engineering'));
+    noPlaceholders(fallback);
+  }
+});

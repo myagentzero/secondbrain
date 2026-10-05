@@ -62,6 +62,9 @@ src/
 └── digests/
     ├── daily.js          # Daily digest logic
     ├── weekly.js         # Weekly digest logic
+    ├── weeklyStats.js    # Rolling 5-week stats store + trend formatting
+    ├── format.js         # Shared helpers for building LLM context sections
+    ├── memory.js         # agentzero memory store wrapper
     └── maintenance.js    # Cleanup and maintenance tasks
 ```
 
@@ -88,6 +91,7 @@ src/
 - Analyzes completed tasks from the week
 - Generates progress analysis and next week focus
 - Cleans up old completed tasks (>7 days)
+- Records weekly stats (captures by category, tasks completed) in `data/weekly-stats.json` (gitignored) via `src/digests/weeklyStats.js`; the prior 5 weeks plus the current week are passed to the LLM as a WEEKLY TREND section
 
 **src/digests/maintenance.js** - Maintenance tasks:
 - **Daily**: Matches completed Google Tasks to open inbox items and auto-closes them
@@ -122,10 +126,10 @@ The scheduler (node-cron) manages these tasks in America/Phoenix timezone:
 All databases have "Last Touched" date field and are linked from Inbox Log.
 
 - **Inbox Log**: Original Text, Filed-To, Destination Name, Confidence, Status, Slack Thread TS, Created
-- **People**: Name, Context, Follow-ups, Tags
+- **People**: Name, Status (Active/Needs Review/Done), Context, Follow-ups, Tags
 - **Projects**: Name, Status (Active/Waiting/Blocked/Done), Next Action, Notes, Tags
 - **Ideas**: Name, One-Liner, Notes, Tags
-- **Admin**: Name, Status (Active/Done), Notes, Due Date
+- **Admin**: Name, Status (Active/Done), Notes, Due Date, Created, Last Touched
 
 ## Important Notes
 

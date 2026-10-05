@@ -126,6 +126,12 @@ const runWeeklyOrphanCleanup = async () => {
     const inboxRecordIds = await queryAllInboxLogRecordIds();
     console.log(`Found ${inboxRecordIds.size} referenced records in Inbox Log`);
 
+    // An empty set means the Inbox Log read failed or its schema changed; proceeding would trash every record
+    if (inboxRecordIds.size === 0) {
+      console.warn('No referenced records found in Inbox Log; skipping orphan cleanup');
+      return { deleted: 0 };
+    }
+
     let deleted = 0;
 
     // Process each of the four tables

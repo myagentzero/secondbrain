@@ -6,34 +6,30 @@ const MAX_OPEN_TASKS = 5;
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-// List existing incomplete tasks from default task list
-const listTasks = async () => {
+// Google Tasks returns 20 items per page by default, so always follow pageToken
+const listAllTasks = async (params) => {
   const auth = await authorize();
   const tasks = google.tasks({ version: 'v1', auth });
 
-  return new Promise((resolve, reject) => {
-    tasks.tasks.list({
-      tasklist: '@default',
-      showCompleted: false,
-      showHidden: false
-    }, (err, result) => {
-      if (err) {
-        reject(err);
-      } else {
-        resolve(result.data.items || []);
-      }
-    });
-  });
+  const items = [];
+  let pageToken;
+
+  do {
+    const result = await tasks.tasks.list({ tasklist: '@default', maxResults: 100, pageToken, ...params });
+    items.push(...(result.data.items || []));
+    pageToken = result.data.nextPageToken;
+  } while (pageToken);
+
+  return items;
 };
+
+// List existing incomplete tasks from default task list
+const listTasks = () => listAllTasks({ showCompleted: false, showHidden: false });
 
 // List completed tasks from default task list
 // Optional `days` parameter filters to tasks completed within the last N days (server-side)
 const listCompletedTasks = async (days) => {
-  const auth = await authorize();
-  const tasks = google.tasks({ version: 'v1', auth });
-
   const params = {
-    tasklist: '@default',
     showCompleted: true,
     showHidden: true
   };
@@ -44,17 +40,8 @@ const listCompletedTasks = async (days) => {
     params.completedMin = cutoff.toISOString();
   }
 
-  return new Promise((resolve, reject) => {
-    tasks.tasks.list(params, (err, result) => {
-      if (err) {
-        reject(err);
-      } else {
-        // Filter to only completed tasks
-        const completed = (result.data.items || []).filter(t => t.status === 'completed');
-        resolve(completed);
-      }
-    });
-  });
+  const items = await listAllTasks(params);
+  return items.filter(t => t.status === 'completed');
 };
 
 // Get completed tasks older than specified days

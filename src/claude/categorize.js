@@ -1,4 +1,5 @@
 const { createMessage, getModel } = require('../llm/client');
+const { getUserName } = require('../config');
 const {
   buildCategorizationPrompt,
   buildReclassificationPrompt,
@@ -77,7 +78,7 @@ const reclassifyMessage = async (text, newCategory, currentStatus) => {
 };
 
 const generateDailyDigestStructured = async (context, existingTasks = [], completedTasks = []) => {
-  const prompt = buildDailyDigestPrompt(context, existingTasks, completedTasks);
+  const prompt = buildDailyDigestPrompt(context, existingTasks, completedTasks, undefined, getUserName());
 
   const response = await createMessage({
     model: getModel('digest'),
@@ -101,8 +102,8 @@ const generateDailyDigestStructured = async (context, existingTasks = [], comple
   }
 };
 
-const formatDigestForSlack = (digest) => {
-  let text = 'Good morning!\n\n';
+const formatDigestForSlack = (digest, userName = getUserName()) => {
+  let text = `Good morning${userName ? `, ${userName}` : ''}!\n\n`;
 
   if (digest.newTasks && digest.newTasks.length > 0) {
     text += '*Top Actions Today:*\n';
@@ -134,7 +135,7 @@ const formatDigestForSlack = (digest) => {
 };
 
 const generateWeeklyDigest = async (context, completedTasks = []) => {
-  const prompt = buildWeeklyDigestPrompt(context, completedTasks);
+  const prompt = buildWeeklyDigestPrompt(context, completedTasks, undefined, getUserName());
 
   const response = await createMessage({
     model: getModel('digest'),

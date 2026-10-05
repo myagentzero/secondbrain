@@ -44,19 +44,39 @@ const downloadIcs = async (url) => {
 
 const COLOR_ID = 8;
 
+// List every event in the range, following pagination (the API returns one page at a time)
+const listAllEvents = async (calendar, calendarId, startDateTime, endDateTime) => {
+  const items = [];
+  let pageToken;
+
+  do {
+    const res = await calendar.events.list({
+      calendarId,
+      timeMin: startDateTime.toISOString(),
+      timeMax: endDateTime.toISOString(),
+      maxResults: 250,
+      singleEvents: true,
+      orderBy: 'startTime',
+      pageToken
+    });
+    items.push(...(res.data.items || []));
+    pageToken = res.data.nextPageToken;
+  } while (pageToken);
+
+  return items;
+};
+
+// Two events are the same occurrence when title and start instant match. Matching on
+// title alone would treat each day of a recurring meeting as a duplicate of the first.
+const startTime = (event) => new Date(event.start?.dateTime || event.start?.date).getTime();
+const isSameEvent = (a, b) => a.summary == b.summary && startTime(a) === startTime(b);
+
 const getSharedCalendarEvents = async (calendar, calendarId, startDateTime, endDateTime) => {
   if (!calendarId) return [];
 
-  const res = await calendar.events.list({
-    calendarId,
-    timeMin: startDateTime.toISOString(),
-    timeMax: endDateTime.toISOString(),
-    maxResults: 10,
-    singleEvents: true,
-    orderBy: 'startTime',
-  });
+  const items = await listAllEvents(calendar, calendarId, startDateTime, endDateTime);
 
-  return res.data.items.map(e => ({
+  return items.map(e => ({
     start: e.start,
     end: e.end,
     summary: e.summary,
@@ -108,13 +128,13 @@ const getUpcomingEvents = async (days) => {
 
   const skipEvents = config.skipEvents || [];
   const filteredEvents = allEvents.filter(event =>
-    !event.summary.startsWith('Canceled') &&
-    !skipEvents.some(item => event.summary.toLowerCase().includes(item.toLowerCase()))
+    !(event.summary || '').startsWith('Canceled') &&
+    !skipEvents.some(item => (event.summary || '').toLowerCase().includes(item.toLowerCase()))
   );
 
   const uniqueEvents = filteredEvents.filter((event, index, self) =>
     index === self.findIndex(item =>
-      item.summary == event.summary && item.start.dateTime == event.start.dateTime
+      isSameEvent(item, event)
     )
   );
 
@@ -179,29 +199,20 @@ const runCalendarSync = async (syncDays) => {
   // Dedupe events
   const uniqueEvents = limitEvents.filter((event, index, self) =>
     index === self.findIndex(item =>
-      item.summary == event.summary && item.start.dateTime == event.start.dateTime
+      isSameEvent(item, event)
     )
   );
 
   console.log(`${uniqueEvents.length} events found...`);
 
   // Get existing primary calendar events
-  const primaryRes = await calendar.events.list({
-    calendarId: 'primary',
-    timeMin: startDateTime.toISOString(),
-    timeMax: endDateTime.toISOString(),
-    maxResults: 30,
-    singleEvents: true,
-    orderBy: 'startTime',
-  });
-
-  const primaryEvents = primaryRes.data.items;
+  const primaryEvents = await listAllEvents(calendar, 'primary', startDateTime, endDateTime);
 
   // Cancel events no longer in source
   for (const event of primaryEvents) {
-    if (event.summary.startsWith('Canceled')) continue;
+    if ((event.summary || '').startsWith('Canceled')) continue;
     if (event.colorId != COLOR_ID) continue;
-    if (uniqueEvents.filter(uEvent => uEvent.summary == event.summary).length) continue;
+    if (uniqueEvents.some(uEvent => isSameEvent(uEvent, event))) continue;
 
     const syncEvent = {
       calendarId: 'primary',
@@ -226,9 +237,9 @@ const runCalendarSync = async (syncDays) => {
 
   // Insert new events
   for (const event of uniqueEvents) {
-    if (config.skipEvents.filter(item => event.summary.toLowerCase().includes(item.toLowerCase())).length) continue;
-    if (primaryEvents.filter(pEvent => pEvent.summary == event.summary).length) continue;
-    if (event.summary.startsWith('Canceled')) continue;
+    if ((config.skipEvents || []).filter(item => (event.summary || '').toLowerCase().includes(item.toLowerCase())).length) continue;
+    if (primaryEvents.some(pEvent => isSameEvent(pEvent, event))) continue;
+    if ((event.summary || '').startsWith('Canceled')) continue;
 
     const syncEvent = {
       calendarId: 'primary',
@@ -278,4 +289,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { runCalendarSync, getUpcomingEvents };
+module.exports = { runCalendarSync, getUpcomingEvents, isSameEvent };

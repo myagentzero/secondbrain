@@ -9,106 +9,52 @@ const { createDailyTasks, listTasks, listCompletedTasks } = require('../tasks/ta
 const { getApp } = require('../slack/client');
 const { getSlackConfig } = require('../config');
 const { checkKeyExpiration } = require('../llm/client');
-const { spawn } = require('child_process');
+const { memoryStore } = require('./memory');
+const { prop, section, fields } = require('./format');
 
-// Store content in agentzero memory
-const memoryStore = (key, content, category) => {
-  return new Promise((resolve, reject) => {
-    const proc = spawn('agentzero', ['memory', 'store', key, '--category', category, '--', content]);
-    let stderr = '';
-    proc.stderr.on('data', (data) => { stderr += data.toString(); });
-    proc.on('close', (code) => {
-      if (code === 0) resolve();
-      else reject(new Error(`agentzero exited with code ${code}: ${stderr}`));
-    });
-    proc.on('error', (err) => reject(err));
-  });
-};
+// One admin task: name plus due date and notes when present
+const adminLines = (task, i) => [
+  `${i + 1}. ${prop.title(task, 'Name') || 'Untitled'}`,
+  ...fields([
+    ['Due', prop.date(task, 'Due Date') || 'No date'],
+    ['Notes', prop.text(task, 'Notes')]
+  ])
+];
 
 // Build context string from Notion data
 const buildDailyContext = (projects, people, admin, upcomingAdmin, keyAlert = null) => {
-  let context = '';
-  if (projects.results.length > 0) {
-    context += '## ACTIVE PROJECTS\n';
-    projects.results.forEach((p, i) => {
-      const name = p.properties?.Name?.title?.[0]?.plain_text || 'Untitled';
-      const status = p.properties?.Status?.select?.name || 'Unknown';
-      const nextAction = p.properties?.['Next Action']?.rich_text?.[0]?.plain_text || 'None specified';
+  const alertLines = keyAlert
+    ? [`1. ${keyAlert.name} [URGENT]`, ...fields([['Due', keyAlert.dueDate], ['Notes', keyAlert.notes]])]
+    : [];
+  // Regular tasks are numbered after the alert so numbering stays continuous
+  const offset = keyAlert ? 1 : 0;
 
-      context += `${i + 1}. ${name}\n`;
-      context += `   Status: ${status}\n`;
-      context += `   Next Action: ${nextAction}\n\n`;
-    });
-  }
+  // Only people with a follow-up are worth a line; the rest are noise
+  const peopleWithFollowUps = people.results.filter(p => prop.title(p, 'Name') && prop.text(p, 'Follow-ups'));
 
-  let peopleSection = '';
-  let personCount = 0;
-  people.results.forEach((p) => {
-    const name = p.properties?.Name?.title?.[0]?.plain_text;
-    const status = p.properties?.Status?.select?.name;
-    if (!name || !status) return;
-    const followUp = p.properties?.['Follow-ups']?.rich_text?.[0]?.plain_text || 'None';
+  return [
+    section('ACTIVE PROJECTS', projects.results.flatMap((p, i) => [
+      `${i + 1}. ${prop.title(p, 'Name') || 'Untitled'}`,
+      ...fields([
+        ['Status', prop.select(p, 'Status') || 'Unknown'],
+        ['Next Action', prop.text(p, 'Next Action')]
+      ])
+    ])),
+    section('PEOPLE TO FOLLOW UP WITH', peopleWithFollowUps.flatMap((p, i) => [
+      `${i + 1}. ${prop.title(p, 'Name')}`,
+      ...fields([['Follow-up', prop.text(p, 'Follow-ups')]])
+    ])),
+    section('TASKS DUE', [
+      ...alertLines,
+      ...admin.results.flatMap((task, i) => adminLines(task, i + offset))
+    ]),
+    section('UPCOMING TASKS (Next Week)', upcomingAdmin.results.flatMap((task, i) => adminLines(task, i)))
+  ].join('');
+};
 
-    personCount++;
-    peopleSection += `${personCount}. ${name}\n`;
-    peopleSection += `   Status: ${status}\n`;
-    peopleSection += `   Follow-up: ${followUp}\n\n`;
-  });
-  if (personCount > 0) {
-    context += '## PEOPLE TO FOLLOW UP WITH\n';
-    context += peopleSection;
-  }
-
-  // Build tasks section with key alert prepended if present
-  const hasKeyAlert = keyAlert !== null;
-  const hasAdminTasks = admin.results.length > 0;
-
-  if (hasKeyAlert || hasAdminTasks) {
-    context += '## TASKS DUE\n';
-    let taskIndex = 0;
-
-    // Key expiration alert first (highest priority)
-    if (hasKeyAlert) {
-      taskIndex++;
-      context += `${taskIndex}. ${keyAlert.name} [URGENT]\n`;
-      context += `   Due: ${keyAlert.dueDate}\n`;
-      context += `   Notes: ${keyAlert.notes}\n\n`;
-    }
-
-    // Regular admin tasks
-    admin.results.forEach((a) => {
-      taskIndex++;
-      const name = a.properties?.Name?.title?.[0]?.plain_text || 'Untitled';
-      const dueDate = a.properties?.['Due Date']?.date?.start || 'No date';
-      const notes = a.properties?.Notes?.rich_text?.[0]?.plain_text || '';
-
-      context += `${taskIndex}. ${name}\n`;
-      context += `   Due: ${dueDate}\n`;
-      if (notes) {
-        context += `   Notes: ${notes}\n`;
-      }
-      context += '\n';
-    });
-  }
-
-  // Build upcoming tasks section
-  if (upcomingAdmin.results.length > 0) {
-    context += '## UPCOMING TASKS (Next Week)\n';
-    upcomingAdmin.results.forEach((a, i) => {
-      const name = a.properties?.Name?.title?.[0]?.plain_text || 'Untitled';
-      const dueDate = a.properties?.['Due Date']?.date?.start || 'No date';
-      const notes = a.properties?.Notes?.rich_text?.[0]?.plain_text || '';
-
-      context += `${i + 1}. ${name}\n`;
-      context += `   Due: ${dueDate}\n`;
-      if (notes) {
-        context += `   Notes: ${notes}\n`;
-      }
-      context += '\n';
-    });
-  }
-
-  return context;
+// Queries are capped to keep the prompt small; say so in the logs when rows are dropped
+const warnIfTruncated = (label, response) => {
+  if (response.has_more) console.warn(`Daily digest: ${label} truncated to ${response.results.length} rows`);
 };
 
 const runDailyDigest = async () => {
@@ -125,6 +71,9 @@ const runDailyDigest = async () => {
       listCompletedTasks(5),
       checkKeyExpiration()
     ]);
+
+    [['projects', projects], ['people', people], ['overdue admin tasks', admin], ['upcoming admin tasks', upcomingAdmin]]
+      .forEach(([label, response]) => warnIfTruncated(label, response));
 
     console.log(`Found ${projects.results.length} projects, ${people.results.length} people, ${admin.results.length} admin tasks, ${upcomingAdmin.results.length} upcoming tasks, ${existingTasks.length} existing tasks, ${completedTasks.length} completed tasks`);
 
@@ -210,5 +159,6 @@ if (require.main === module) {
 }
 
 module.exports = {
-  runDailyDigest
+  runDailyDigest,
+  buildDailyContext
 };

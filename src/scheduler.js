@@ -41,12 +41,17 @@ const startScheduler = () => {
   // Weekly orphan cleanup + digest at 8:00 PM on Sunday
   weeklyJob = cron.schedule('0 20 * * 0', async () => {
     console.log('Running scheduled weekly orphan cleanup and digest...');
+    // Independent try blocks so a cleanup failure can't skip the digest
     try {
       await runWeeklyOrphanCleanup();
+    } catch (error) {
+      console.error('Weekly orphan cleanup failed:', error);
+    }
+    try {
       console.log('Running scheduled weekly digest...');
       await runWeeklyDigest();
     } catch (error) {
-      console.error('Weekly cleanup and digest failed:', error);
+      console.error('Weekly digest failed:', error);
     }
   }, {
     timezone: 'America/Phoenix'

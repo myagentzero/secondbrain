@@ -9,23 +9,11 @@ const { getApp } = require('../slack/client');
 const { getSlackConfig } = require('../config');
 const { deleteOldCompletedTasks, listCompletedTasks } = require('../tasks/tasks');
 const { getUpcomingEvents } = require('../calendar/sync');
-const { spawn } = require('child_process');
+const { memoryStore } = require('./memory');
+const { prop, section, fields } = require('./format');
+const { computeWeekStats, getHistory, saveWeekStats, formatTrendSection, weekKey } = require('./weeklyStats');
 
 const UPCOMING_MEETING_DAYS = 7;
-
-// Store content in agentzero memory
-const memoryStore = (key, content, category) => {
-  return new Promise((resolve, reject) => {
-    const proc = spawn('agentzero', ['memory', 'store', key, '--category', category, '--', content]);
-    let stderr = '';
-    proc.stderr.on('data', (data) => { stderr += data.toString(); });
-    proc.on('close', (code) => {
-      if (code === 0) resolve();
-      else reject(new Error(`agentzero exited with code ${code}: ${stderr}`));
-    });
-    proc.on('error', (err) => reject(err));
-  });
-};
 
 // Convert the model's standard markdown output into Slack mrkdwn, since Slack
 // doesn't render # headers or **bold**
@@ -39,108 +27,60 @@ const sanitizeForSlack = (text) => {
     .trim();
 };
 
-// Format Inbox Log items (used for both active and needs-review sections)
-const formatInboxItems = (heading, items) => {
-  if (!items.length) return `\n## ${heading}\nNone\n`;
-
-  let text = `\n## ${heading}\n`;
-  items.forEach((item, i) => {
-    const originalText = item.properties?.['Original Text']?.title?.[0]?.plain_text || 'No text';
-    const filedTo = item.properties?.['Filed-To']?.select?.name || 'Unknown';
-    const destName = item.properties?.['Destination Name']?.rich_text?.[0]?.plain_text || '';
-
-    text += `${i + 1}. [${filedTo}] ${destName || originalText.substring(0, 60)}\n`;
-  });
-
-  return text;
+// One Inbox Log entry: "[filed-to] destination name (or start of the original text)"
+const inboxLine = (item, i) => {
+  const originalText = prop.title(item, 'Original Text') || 'No text';
+  const destName = prop.text(item, 'Destination Name') || originalText.substring(0, 60);
+  return `${i + 1}. [${prop.select(item, 'Filed-To') || 'Unknown'}] ${destName}`;
 };
 
 // Format upcoming Outlook/shared calendar meetings
-const formatUpcomingEvents = (events) => {
-  if (!events.length) return '\n## UPCOMING MEETINGS THIS WEEK\nNone\n';
-
-  let text = '\n## UPCOMING MEETINGS THIS WEEK\n';
-  events.forEach((event, i) => {
+const formatUpcomingEvents = (events) =>
+  section('UPCOMING MEETINGS THIS WEEK', events.map((event, i) => {
     const start = new Date(event.start.dateTime || event.start.date);
     const when = start.toLocaleString('en-US', {
       weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
       timeZone: 'America/Phoenix'
     });
 
-    text += `${i + 1}. [${when}] ${event.summary}${event.location ? ' @ ' + event.location : ''}\n`;
-  });
+    return `${i + 1}. [${when}] ${event.summary}${event.location ? ' @ ' + event.location : ''}`;
+  }));
 
-  return text;
-};
+const formatActiveProjects = (projects) =>
+  section('ACTIVE PROJECTS STATUS', projects.flatMap((p, i) => [
+    `${i + 1}. ${prop.title(p, 'Name') || 'Untitled'}`,
+    ...fields([
+      ['Status', prop.select(p, 'Status') || 'Unknown'],
+      ['Next', prop.text(p, 'Next Action')],
+      ['Last Touched', prop.date(p, 'Last Touched') || 'Unknown']
+    ])
+  ]));
 
-// Format active Admin tasks (used in weekly context, right after ACTIVE PROJECTS STATUS)
-const formatActiveAdminTasks = (adminTasks) => {
-  if (!adminTasks.length) return '\n## ACTIVE ADMIN TASKS\nNone\n\n';
+const formatActiveAdminTasks = (adminTasks) =>
+  section('ACTIVE ADMIN TASKS', adminTasks.flatMap((task, i) => [
+    `${i + 1}. ${prop.title(task, 'Name') || 'Untitled'}`,
+    ...fields([
+      ['Notes', prop.text(task, 'Notes')],
+      ['Due', prop.date(task, 'Due Date')],
+      ['Created', prop.date(task, 'Created') || 'Unknown'],
+      ['Last Touched', prop.date(task, 'Last Touched')]
+    ])
+  ]));
 
-  let text = '\n## ACTIVE ADMIN TASKS\n';
-  adminTasks.forEach((task, i) => {
-    const name = task.properties?.Name?.title?.[0]?.plain_text || 'Untitled';
-    const notes = task.properties?.Notes?.rich_text?.[0]?.plain_text || 'None';
-    const dueDate = task.properties?.['Due Date']?.date?.start || 'None';
-    const created = task.properties?.Created?.date?.start || 'Unknown';
+// Build the weekly context. Each fact appears once: per-category counts live in the
+// trend section, and Needs Review items are listed only under NEEDS REVIEW.
+const buildWeeklyContext = (inboxLog, projects, adminTasks, needsReviewItems, upcomingEvents, trendSection = '') => {
+  const needsReviewIds = new Set(needsReviewItems.results.map(item => item.id));
+  const captured = inboxLog.results.filter(item => !needsReviewIds.has(item.id));
 
-    text += `${i + 1}. ${name}\n`;
-    text += `   Notes: ${notes}\n`;
-    text += `   Due: ${dueDate}\n`;
-    text += `   Created: ${created}\n\n`;
-  });
-
-  return text;
-};
-
-// Build context string from Notion data
-const buildWeeklyContext = (inboxLog, projects, adminTasks, needsReviewItems, upcomingEvents) => {
-  let context = '## ITEMS CAPTURED LAST WEEK\n';
-
-  inboxLog.results.forEach((item, i) => {
-    const originalText = item.properties?.['Original Text']?.title?.[0]?.plain_text || 'No text';
-    const filedTo = item.properties?.['Filed-To']?.select?.name || 'Unknown';
-    const destName = item.properties?.['Destination Name']?.rich_text?.[0]?.plain_text || '';
-
-    context += `${i + 1}. [${filedTo}] ${destName || originalText.substring(0, 50)}\n`;
-  });
-
-  // Count by category
-  const categoryCounts = {};
-  inboxLog.results.forEach(item => {
-    const cat = item.properties?.['Filed-To']?.select?.name || 'Unknown';
-    categoryCounts[cat] = (categoryCounts[cat] || 0) + 1;
-  });
-
-  context += '\n## CAPTURE SUMMARY\n';
-  context += `- Total Captures: ${inboxLog.results.length}\n`;
-  for (const [cat, count] of Object.entries(categoryCounts)) {
-    context += `- ${cat}: ${count}\n`;
-  }
-
-  if (projects.results.length > 0) {
-    context += '\n## ACTIVE PROJECTS STATUS\n';
-    projects.results.forEach((p, i) => {
-      const name = p.properties?.Name?.title?.[0]?.plain_text || 'Untitled';
-      const status = p.properties?.Status?.select?.name || 'Unknown';
-      const nextAction = p.properties?.['Next Action']?.rich_text?.[0]?.plain_text || 'None specified';
-      const created = p.created_time ? p.created_time.split('T')[0] : 'Unknown';
-      const lastTouched = p.properties?.['Last Touched']?.date?.start || 'Unknown';
-
-      context += `${i + 1}. ${name}\n`;
-      context += `   Status: ${status}\n`;
-      context += `   Next: ${nextAction}\n`;
-      context += `   Created: ${created}\n`;
-      context += `   Last Touched: ${lastTouched}\n\n`;
-    });
-  }
-
-  context += formatActiveAdminTasks(adminTasks.results);
-
-  context += formatInboxItems('NEEDS REVIEW', needsReviewItems.results);
-  context += formatUpcomingEvents(upcomingEvents);
-
-  return context;
+  return [
+    section('ITEMS CAPTURED LAST WEEK', captured.map(inboxLine)),
+    trendSection,
+    formatActiveProjects(projects.results),
+    formatActiveAdminTasks(adminTasks.results),
+    section('NEEDS REVIEW', needsReviewItems.results.map(inboxLine)),
+    formatUpcomingEvents(upcomingEvents)
+  ].join('');
 };
 
 const runWeeklyDigest = async () => {
@@ -152,7 +92,7 @@ const runWeeklyDigest = async () => {
       queryWeekInboxLog(),
       queryAllOpenProjects(),
       queryAllOpenAdmin(),
-      listCompletedTasks(),
+      listCompletedTasks(7),
       queryNeedsReviewInboxLog(),
       getUpcomingEvents(UPCOMING_MEETING_DAYS).catch(err => {
         console.error('Failed to fetch upcoming meetings:', err.message);
@@ -162,8 +102,12 @@ const runWeeklyDigest = async () => {
 
     console.log(`Found ${inboxLog.results.length} inbox items, ${projects.results.length} projects, ${adminTasks.results.length} admin tasks, ${completedTasks.length} completed tasks, ${needsReviewItems.results.length} needing review, ${upcomingEvents.length} upcoming meetings`);
 
+    // Compare this week against the stored prior weeks
+    const weekStats = computeWeekStats(inboxLog.results, completedTasks);
+    const trendSection = formatTrendSection(weekStats, getHistory(weekStats.weekEnding));
+
     // Build context
-    const context = buildWeeklyContext(inboxLog, projects, adminTasks, needsReviewItems, upcomingEvents);
+    const context = buildWeeklyContext(inboxLog, projects, adminTasks, needsReviewItems, upcomingEvents, trendSection);
 
     // Generate digest with Claude
     const rawDigest = await generateWeeklyDigest(context, completedTasks);
@@ -183,9 +127,18 @@ const runWeeklyDigest = async () => {
     });
     console.log('Posted to Slack');
 
+    // Persist only after a successful post so a failed run doesn't record a week
+    try {
+      saveWeekStats(weekStats);
+      console.log('Saved weekly stats');
+    } catch (statsError) {
+      console.error('Failed to save weekly stats:', statsError.message);
+    }
+
     // Store digest in agentzero memory
     try {
-      const today = new Date().toISOString().split('T')[0].replace(/-/g, '_');
+      // Phoenix date: at 8pm Sunday the UTC date is already Monday
+      const today = weekKey().replace(/-/g, '_');
       await memoryStore(`secondbrain_weekly_digest_${today}`, digest, 'daily');
       console.log('Stored digest in agentzero memory');
     } catch (memError) {
@@ -220,5 +173,6 @@ if (require.main === module) {
 }
 
 module.exports = {
-  runWeeklyDigest
+  runWeeklyDigest,
+  buildWeeklyContext
 };

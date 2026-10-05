@@ -4,6 +4,14 @@ const getMSTDate = () => {
   return new Date().toLocaleString('sv-SE', { timeZone: 'America/Phoenix' }).replace(' ', 'T');
 };
 
+// Notion rejects rich text / title content over 2000 characters
+const NOTION_TEXT_LIMIT = 2000;
+const rt = (text) => {
+  const value = String(text ?? '');
+  const content = value.length > NOTION_TEXT_LIMIT ? `${value.slice(0, NOTION_TEXT_LIMIT - 1)}…` : value;
+  return [{ text: { content } }];
+};
+
 const moveWeekendToMonday = (date) => {
   const adjusted = new Date(date);
   const day = adjusted.getDay();
@@ -55,8 +63,15 @@ const formatDateForNotion = (value) => {
   return null;
 };
 
+// YYYY-MM-DD from local date parts (toISOString would shift the day after 5pm Phoenix)
+const toDateString = (date) => {
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+};
+
+// One week out from today's Phoenix date, at local midnight
 const getDefaultAdminDueDate = () => {
-  const d = new Date();
+  const d = new Date(`${getMSTDate().split('T')[0]}T00:00:00`);
   d.setDate(d.getDate() + 7);
 
   return moveWeekendToMonday(d);
@@ -77,18 +92,18 @@ const createInboxLogEntry = async ({
   const { inboxLog } = getDatabaseIds();
 
   const properties = {
-    'Original Text': { title: [{ text: { content: originalText } }] },
+    'Original Text': { title: rt(originalText) },
     'Filed-To': { select: { name: filedTo || destination } },
-    'Destination Name': { rich_text: [{ text: { content: destinationName || '' } }] },
+    'Destination Name': { rich_text: rt(destinationName || '') },
     'Created': { date: { start: getMSTDate() } },
-    'Slack Thread TS': { rich_text: [{ text: { content: slackThreadTs || '' } }] }
+    'Slack Thread TS': { rich_text: rt(slackThreadTs || '') }
   };
 
   if (destinationUrl) {
     properties['Destination URL'] = { url: destinationUrl };
   }
   if (notionRecordId) {
-    properties['Notion Record ID'] = { rich_text: [{ text: { content: notionRecordId } }] };
+    properties['Notion Record ID'] = { rich_text: rt(notionRecordId) };
   }
   if (confidence !== undefined) {
     properties['Confidence'] = { number: confidence };
@@ -108,16 +123,16 @@ const createPeopleEntry = async ({ name, status, context, followUps, tags }) => 
   const { people } = getDatabaseIds();
 
   const properties = {
-    'Name': { title: [{ text: { content: name } }] },
+    'Name': { title: rt(name) },
     'Status': { select: { name: status || 'Active' } },
     'Last Touched': { date: { start: getMSTDate() } }
   };
 
   if (context) {
-    properties['Context'] = { rich_text: [{ text: { content: context } }] };
+    properties['Context'] = { rich_text: rt(context) };
   }
   if (followUps) {
-    properties['Follow-ups'] = { rich_text: [{ text: { content: followUps } }] };
+    properties['Follow-ups'] = { rich_text: rt(followUps) };
   }
   if (tags && tags.length > 0) {
     properties['Tags'] = { multi_select: tags.map(t => ({ name: t })) };
@@ -134,16 +149,16 @@ const createProjectsEntry = async ({ name, status, nextAction, notes, tags }) =>
   const { projects } = getDatabaseIds();
 
   const properties = {
-    'Name': { title: [{ text: { content: name } }] },
+    'Name': { title: rt(name) },
     'Status': { select: { name: status || 'Active' } },
     'Last Touched': { date: { start: getMSTDate() } }
   };
 
   if (nextAction) {
-    properties['Next Action'] = { rich_text: [{ text: { content: nextAction } }] };
+    properties['Next Action'] = { rich_text: rt(nextAction) };
   }
   if (notes) {
-    properties['Notes'] = { rich_text: [{ text: { content: notes } }] };
+    properties['Notes'] = { rich_text: rt(notes) };
   }
   if (tags && tags.length > 0) {
     properties['Tags'] = { multi_select: tags.map(t => ({ name: t })) };
@@ -160,15 +175,15 @@ const createIdeasEntry = async ({ name, oneLiner, notes, tags }) => {
   const { ideas } = getDatabaseIds();
 
   const properties = {
-    'Name': { title: [{ text: { content: name } }] },
+    'Name': { title: rt(name) },
     'Last Touched': { date: { start: getMSTDate() } }
   };
 
   if (oneLiner) {
-    properties['One-Liner'] = { rich_text: [{ text: { content: oneLiner } }] };
+    properties['One-Liner'] = { rich_text: rt(oneLiner) };
   }
   if (notes) {
-    properties['Notes'] = { rich_text: [{ text: { content: notes } }] };
+    properties['Notes'] = { rich_text: rt(notes) };
   }
   if (tags && tags.length > 0) {
     properties['Tags'] = { multi_select: tags.map(t => ({ name: t })) };
@@ -185,16 +200,17 @@ const createAdminEntry = async ({ name, notes, status, dueDate }) => {
   const { admin } = getDatabaseIds();
 
   const properties = {
-    'Name': { title: [{ text: { content: name } }] },
+    'Name': { title: rt(name) },
     'Status': { select: { name: status || 'Active' } },
-    'Created': { date: { start: getMSTDate() } }
+    'Created': { date: { start: getMSTDate() } },
+    'Last Touched': { date: { start: getMSTDate() } }
   };
 
   if (notes) {
-    properties['Notes'] = { rich_text: [{ text: { content: notes } }] };
+    properties['Notes'] = { rich_text: rt(notes) };
   }
   const effectiveDueDate = formatDateForNotion(dueDate) || getDefaultAdminDueDate();
-  properties['Due Date'] = { date: { start: effectiveDueDate.toISOString().split('T')[0] } };
+  properties['Due Date'] = { date: { start: toDateString(effectiveDueDate) } };
 
   return createPage({
     parent: { database_id: admin },
@@ -229,13 +245,13 @@ const updateInboxLogEntry = async (pageId, updates) => {
     properties['Filed-To'] = { select: { name: updates.filedTo } };
   }
   if (updates.destinationName) {
-    properties['Destination Name'] = { rich_text: [{ text: { content: updates.destinationName } }] };
+    properties['Destination Name'] = { rich_text: rt(updates.destinationName) };
   }
   if (updates.destinationUrl) {
     properties['Destination URL'] = { url: updates.destinationUrl };
   }
   if (updates.notionRecordId) {
-    properties['Notion Record ID'] = { rich_text: [{ text: { content: updates.notionRecordId } }] };
+    properties['Notion Record ID'] = { rich_text: rt(updates.notionRecordId) };
   }
 
   return updatePage({
@@ -271,7 +287,7 @@ const updateProjectsEntry = async (pageId, { status }) => {
 // Update Admin status
 const updateAdminEntry = async (pageId, { status }) => {
   const properties = {
-    'Created': { date: { start: getMSTDate() } }
+    'Last Touched': { date: { start: getMSTDate() } }
   };
 
   if (status) {
@@ -300,6 +316,20 @@ const updatePeopleEntry = async (pageId, { status }) => {
   });
 };
 
+// Run a query to completion, following pagination. Returns { results } like a single page.
+const queryAll = async (params) => {
+  const results = [];
+  let cursor;
+
+  do {
+    const response = await queryDatabase({ ...params, page_size: 100, start_cursor: cursor });
+    results.push(...response.results);
+    cursor = response.has_more ? response.next_cursor : undefined;
+  } while (cursor);
+
+  return { results };
+};
+
 // Query active projects (for daily digest)
 const queryActiveProjects = async () => {
   const { projects } = getDatabaseIds();
@@ -316,23 +346,29 @@ const queryActiveProjects = async () => {
   });
 };
 
-// Query people with follow-ups (for daily digest)
+// Query active/waiting people who have a follow-up written down (for daily digest)
 const queryPeopleWithFollowUps = async () => {
   const { people } = getDatabaseIds();
 
   return queryDatabase({
     database_id: people,
     filter: {
-      or: [
-        { property: 'Status', select: { equals: 'Active' } },
-        { property: 'Status', select: { equals: 'Waiting' } }
+      and: [
+        {
+          or: [
+            { property: 'Status', select: { equals: 'Active' } },
+            { property: 'Status', select: { equals: 'Waiting' } }
+          ]
+        },
+        { property: 'Follow-ups', rich_text: { is_not_empty: true } }
       ]
     },
     page_size: 10
   });
 };
 
-// Query overdue admin tasks (for daily digest)
+// Query admin tasks due today, overdue, or undated (for daily digest), oldest first.
+// Upcoming tasks start tomorrow, so no due date falls between the two queries.
 const queryOverdueAdmin = async () => {
   const { admin } = getDatabaseIds();
 
@@ -342,14 +378,15 @@ const queryOverdueAdmin = async () => {
       and: [
         {
           or: [
-            { property: 'Due Date', date: { before: getMSTDate() } },
+            { property: 'Due Date', date: { on_or_before: getMSTDate().split('T')[0] } },
             { property: 'Due Date', date: { is_empty: true } }
           ]
         },
         { property: 'Status', select: { equals: 'Active' } }
       ]
     },
-    page_size: 10
+    page_size: 10,
+    sorts: [{ property: 'Due Date', direction: 'ascending' }]
   });
 };
 
@@ -361,7 +398,7 @@ const queryUpcomingAdmin = async () => {
     database_id: admin,
     filter: {
       and: [
-        { property: 'Due Date', date: { after: getMSTDate() } },
+        { property: 'Due Date', date: { after: getMSTDate().split('T')[0] } },
         { property: 'Status', select: { equals: 'Active' } }
       ]
     },
@@ -374,13 +411,12 @@ const queryUpcomingAdmin = async () => {
 const queryWeekInboxLog = async () => {
   const { inboxLog } = getDatabaseIds();
 
-  return queryDatabase({
+  return queryAll({
     database_id: inboxLog,
     filter: {
       property: 'Created',
       date: { past_week: {} }
-    },
-    page_size: 50
+    }
   });
 };
 
@@ -388,7 +424,7 @@ const queryWeekInboxLog = async () => {
 const queryAllOpenProjects = async () => {
   const { projects } = getDatabaseIds();
 
-  return queryDatabase({
+  return queryAll({
     database_id: projects,
     filter: {
       or: [
@@ -396,8 +432,7 @@ const queryAllOpenProjects = async () => {
         { property: 'Status', select: { equals: 'Waiting' } },
         { property: 'Status', select: { equals: 'Blocked' } }
       ]
-    },
-    page_size: 30
+    }
   });
 };
 
@@ -405,12 +440,11 @@ const queryAllOpenProjects = async () => {
 const queryAllOpenAdmin = async () => {
   const { admin } = getDatabaseIds();
 
-  return queryDatabase({
+  return queryAll({
     database_id: admin,
     filter: {
       property: 'Status', select: { equals: 'Active' }
     },
-    page_size: 30,
     sorts: [{ property: 'Due Date', direction: 'ascending' }]
   });
 };
@@ -419,7 +453,7 @@ const queryAllOpenAdmin = async () => {
 const queryOpenInboxLog = async () => {
   const { inboxLog } = getDatabaseIds();
 
-  return queryDatabase({
+  return queryAll({
     database_id: inboxLog,
     filter: {
       or: [
@@ -427,8 +461,7 @@ const queryOpenInboxLog = async () => {
         { property: 'Status', select: { equals: 'Waiting' } },
         { property: 'Status', select: { equals: 'Blocked' } }
       ]
-    },
-    page_size: 100
+    }
   });
 };
 
@@ -436,13 +469,12 @@ const queryOpenInboxLog = async () => {
 const queryNeedsReviewInboxLog = async () => {
   const { inboxLog } = getDatabaseIds();
 
-  return queryDatabase({
+  return queryAll({
     database_id: inboxLog,
     filter: {
       property: 'Status',
       select: { equals: 'Needs Review' }
-    },
-    page_size: 50
+    }
   });
 };
 

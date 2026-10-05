@@ -14,9 +14,19 @@ const getDateContext = (now = new Date()) => ({
 const render = (template, vars) =>
   template.replace(/{{(\w+)}}/g, (match, key) => (key in vars ? String(vars[key]) : match));
 
-const USER_CONTEXT = 'The user is a Director of Software Engineering at an eCommerce company, managing three teams working on catalog, basket, and product definition software.';
+const USER_ROLE = 'a Director of Engineering at an eCommerce company, managing three teams working on the product catalog, catalog management tool, and credit reserve software.';
 
-const STATUS_RULES = `- Status for people: "Active" or "Needs Review". Status for projects and admin: "Active", "Waiting", "Blocked", or "Done".
+// Template variables for naming the user. Falls back to "the user" when no name is
+// configured. Pronouns are never assumed: the prompts use the name or second person.
+const userVars = (userName) => {
+  const user = (userName || '').trim() || 'the user';
+  return {
+    USER: user,
+    USER_CONTEXT: `${user[0].toUpperCase()}${user.slice(1)} is ${USER_ROLE}`
+  };
+};
+
+const STATUS_RULES = `- Status for people: "Active", "Needs Review", or "Done". Status for projects and admin: "Active", "Waiting", "Blocked", or "Done".
 - "next_action" must be specific and executable. Bad: "Work on website". Good: "Email Sarah to confirm deadline".
 - Resolve relative dates ("tomorrow", "Friday") against today's date and format as YYYY-MM-DD. "due_date" must be a future date; otherwise null.
 - Use [] for tags when none clearly apply.`;
@@ -76,7 +86,7 @@ ${RECORD_SCHEMAS}
 
 ${STATUS_RULES}`;
 
-const DAILY_DIGEST_PROMPT = `Generate a structured daily digest for the user. ${USER_CONTEXT}
+const DAILY_DIGEST_PROMPT = `Prepare the daily digest for {{USER}}. {{USER_CONTEXT}} The digest runs at 5am on weekdays, before the workday starts.
 
 Today is {{DATE}} ({{DAY_OF_WEEK}}).
 
@@ -84,25 +94,33 @@ Today is {{DATE}} ({{DAY_OF_WEEK}}).
 {{CONTEXT}}
 </data>
 {{EXISTING_TASKS}}{{COMPLETED_TASKS}}
+# Reading the data
+- TASKS DUE: admin tasks that are due today, overdue, or have no due date. An [URGENT] item is a system alert that comes first.
+- UPCOMING TASKS: due later; use them to spot what to start early, not as today's work.
+- ACTIVE PROJECTS: Waiting projects are blocked on someone else, so they rarely need a new task.
+- PEOPLE TO FOLLOW UP WITH: people with an open follow-up.
+
 # Output
 Return only a JSON object with no markdown:
 {
   "newTasks": [{"title": "...", "notes": "..."}],
   "peopleToConnect": [{"name": "...", "followUp": "..."}],
-  "watchOutFor": "...",
-  "smallWin": "..."
+  "watchOutFor": "..." or null,
+  "smallWin": "..." or null
 }
 
 # Rules
-- newTasks: up to 3, most important first; fewer is fine, [] if none. Prioritize tasks that are due and active projects.
-- Each title is a specific, executable action, not motivation. Bad: "Work on website". Good: "Email Sarah to confirm deadline".
-- Never duplicate an existing task or reopen a completed one.
-- notes: under 150 characters, giving context or source.
-- peopleToConnect: [] if none.
-- watchOutFor: things stuck, overdue, or neglected; null if none.
-- smallWin: progress made or something worth noticing; null if none.`;
+- newTasks: up to 3, most important first, [] if nothing qualifies. Rank [URGENT] items, then overdue tasks, then next actions on Active projects.
+- Each title is a specific action {{USER}} can do today, not motivation. Bad: "Work on website". Good: "Email Sarah to confirm deadline".
+- notes: under 150 characters, naming the project, person, or due date the task comes from.
+- Skip anything already in existing_tasks, and do not recreate anything in completed_tasks.
+- peopleToConnect: up to 3, each with the follow-up to raise; [] if none.
+- watchOutFor: one or two sentences on what is stuck, overdue, or neglected; null if nothing.
+- smallWin: one sentence on recent progress, taken from completed_tasks or project status; null if nothing.
+- Use only names and facts from the data.
+- Write watchOutFor and smallWin directly to {{USER}} in second person ("you").`;
 
-const WEEKLY_DIGEST_PROMPT = `Write a weekly review and week-ahead plan for the user. ${USER_CONTEXT} This runs Sunday night: review the week that just ended, then plan the next one.
+const WEEKLY_DIGEST_PROMPT = `Write a weekly review and week-ahead plan for {{USER}}. {{USER_CONTEXT}} The digest runs Sunday night: review the week that just ended, then plan the next one.
 
 Today is {{DATE}} ({{DAY_OF_WEEK}}).
 
@@ -111,27 +129,28 @@ Today is {{DATE}} ({{DAY_OF_WEEK}}).
 {{COMPLETED_TASKS}}
 </data>
 
-# Format
-Use exactly these sections. Omit any section that has no content; never invent meetings, projects, tasks, or review items.
+# Output
+Use exactly these sections, in this order. Omit a section, heading included, when its data is empty. Use only what is in <data>; never invent meetings, projects, tasks, or review items.
 
 # Week in Review
 ## Quick Stats
-Total captures and per-category breakdown from CAPTURE SUMMARY. Note if volume was unusually high or low.
+This week's captures (total and by category) and tasks completed, compared with WEEKLY TREND: direction, and any figure well above or below the prior-week average. Weeks marked "not recorded" are missing data, not zero.
 ## What Moved Forward
-Projects with a recent Last Touched date and items from COMPLETED TASKS LAST WEEK.
+Projects with a recent Last Touched date, and items from COMPLETED TASKS LAST WEEK.
 ## Open Loops (needs attention)
-Blocked, stalled, or waiting items from ACTIVE PROJECTS STATUS and ACTIVE ADMIN TASKS. Flag projects with Last Touched over a week ago and admin tasks created over a week ago.
+Blocked, stalled, or waiting items from ACTIVE PROJECTS STATUS and ACTIVE ADMIN TASKS. Flag projects and admin tasks last touched over a week ago (use Created for admin tasks with no Last Touched).
 ## Needs Review
 Each NEEDS REVIEW item with a one-line reason it is ambiguous.
 ## Week Ahead: Meetings to Prep For
-From UPCOMING MEETINGS THIS WEEK, meetings likely needing prep (external, presentations, 1:1s with an open agenda item, anything tied to an active project or admin task), each with a one-line prep suggestion. Skip routine meetings.
+From UPCOMING MEETINGS THIS WEEK, only meetings likely to need prep (external, presentations, 1:1s with an open agenda item, or tied to an active project or admin task), each with a one-line prep suggestion. Skip routine meetings.
 ## Patterns I Notice
-One observation about themes or where energy is going, from ITEMS CAPTURED LAST WEEK and CAPTURE SUMMARY.
+One observation about themes or where energy is going, drawn from ITEMS CAPTURED LAST WEEK and WEEKLY TREND (for example a category growing or shrinking, or captures outpacing completions). Cite only trends the data supports; with no prior weeks, don't claim any.
 ## Suggested Focus for Next Week
-Three numbered, concrete actions, highest priority first, grounded in projects, admin tasks, or meetings from the data.
+Three numbered, concrete actions, highest priority first, each grounded in a project, admin task, or meeting from the data.
 
 # Style
-Analytical, concise, and direct (say so plainly if something looks stuck). Emojis only sparingly for emphasis.`;
+Analytical, concise, and direct; say plainly when something looks stuck. Use bullets, not tables (the output is posted to Slack). Emojis sparingly.
+Write directly to {{USER}} in second person ("you") rather than referring to them in the third person.`;
 
 const TASK_COMPLETION_MATCH_PROMPT = `Match completed Google Tasks to open inbox items. A match means both refer to the same action, project, or topic, even if worded differently.
 
@@ -168,24 +187,25 @@ const buildReclassificationPrompt = (text, category, status, now) => {
   });
 };
 
-const buildDailyDigestPrompt = (context, existingTasks = [], completedTasks = [], now) => {
+const buildDailyDigestPrompt = (context, existingTasks = [], completedTasks = [], now, userName) => {
   const { date, dayOfWeek } = getDateContext(now);
   const existing = existingTasks.length
-    ? `\n<existing_tasks note="already captured; do not duplicate">\n${titleList(existingTasks)}\n</existing_tasks>\n`
+    ? `\n<existing_tasks>\n${titleList(existingTasks)}\n</existing_tasks>\n`
     : '';
   const completed = completedTasks.length
-    ? `\n<completed_tasks note="last 5 days; do not reopen">\n${titleList(completedTasks)}\n</completed_tasks>\n`
+    ? `\n<completed_tasks>\n${titleList(completedTasks)}\n</completed_tasks>\n`
     : '';
   return render(DAILY_DIGEST_PROMPT, {
     CONTEXT: context,
     DATE: date,
     DAY_OF_WEEK: dayOfWeek,
     EXISTING_TASKS: existing,
-    COMPLETED_TASKS: completed
+    COMPLETED_TASKS: completed,
+    ...userVars(userName)
   });
 };
 
-const buildWeeklyDigestPrompt = (context, completedTasks = [], now) => {
+const buildWeeklyDigestPrompt = (context, completedTasks = [], now, userName) => {
   const { date, dayOfWeek } = getDateContext(now);
   const completed = completedTasks.length
     ? `\n## COMPLETED TASKS LAST WEEK\n${titleList(completedTasks)}`
@@ -194,7 +214,8 @@ const buildWeeklyDigestPrompt = (context, completedTasks = [], now) => {
     CONTEXT: context,
     DATE: date,
     DAY_OF_WEEK: dayOfWeek,
-    COMPLETED_TASKS: completed
+    COMPLETED_TASKS: completed,
+    ...userVars(userName)
   });
 };
 

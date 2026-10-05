@@ -47,6 +47,9 @@ const getLLMConfig = () => {
   return cfg.llm;
 };
 
+// Name used to personalize digests; null when not configured
+const getUserName = () => loadConfig().user?.name?.trim() || null;
+
 const getLLMUserAgent = () => {
   const cfg = loadConfig();
   return (cfg.llm && cfg.llm.userAgent) || 'secondbrain/1.0';
@@ -59,5 +62,6 @@ module.exports = {
   getSlackConfig,
   getNotionConfig,
   getLLMConfig,
-  getLLMUserAgent
+  getLLMUserAgent,
+  getUserName
 };
