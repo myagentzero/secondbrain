@@ -84,7 +84,7 @@ src/
 - Creates Google Tasks for suggestions
 - Posts to Slack
 
-**src/digests/weekly.js** - Weekly digest at 5pm Sunday:
+**src/digests/weekly.js** - Weekly digest at 8pm Sunday:
 - Analyzes completed tasks from the week
 - Generates progress analysis and next week focus
 - Cleans up old completed tasks (>7 days)
@@ -112,7 +112,7 @@ The scheduler (node-cron) manages these tasks in America/Phoenix timezone:
 
 - **4:30 AM (every day)**: Daily maintenance (task cleanup)
 - **5:00 AM (Mon-Fri)**: Daily digest generation
-- **5:00 PM (Sundays)**: Weekly orphan cleanup + weekly digest generation
+- **8:00 PM (Sundays)**: Weekly orphan cleanup + weekly digest generation
 - **7am-3pm (weekdays, hourly)**: Calendar sync (1 day ahead)
 - **4pm (Mon-Thu)**: Calendar sync (2 days ahead)
 - **4pm (Fridays)**: Calendar sync (4 days ahead, covers weekend)
