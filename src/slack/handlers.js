@@ -16,6 +16,8 @@ const {
 
 const CONFIDENCE_THRESHOLD = 0.6;
 const PROCESSING_REACTION = 'hourglass_flowing_sand';
+const DONE_REACTION = 'checkered_flag';
+const BLOCKED_REACTION = 'no_entry';
 
 const addReaction = async (app, channel, timestamp, name) => {
   try {
@@ -288,9 +290,18 @@ const handleCorrection = async (message, say) => {
         await statusUpdaters[currentFiledTo](notionRecordId, { status: parsed.newStatus });
       }
 
-      // Reactivating via Slack removes the auto-close marker
-      if (parsed.newStatus === 'Active') {
-        await removeReaction(app, message.channel, threadTs, 'checkered_flag');
+      // Done adds the same flag the auto-close maintenance uses; any other status clears it
+      if (parsed.newStatus === 'Done') {
+        await addReaction(app, message.channel, threadTs, DONE_REACTION);
+      } else {
+        await removeReaction(app, message.channel, threadTs, DONE_REACTION);
+      }
+
+      // Blocked adds a marker; any other status clears it
+      if (parsed.newStatus === 'Blocked') {
+        await addReaction(app, message.channel, threadTs, BLOCKED_REACTION);
+      } else {
+        await removeReaction(app, message.channel, threadTs, BLOCKED_REACTION);
       }
 
       await say({
