@@ -166,7 +166,7 @@ src/
 └── digests/
     ├── daily.js          # Daily digest (5am, Mon-Fri)
     ├── weekly.js         # Weekly digest (Sunday 5pm)
-    └── maintenance.js    # Cleanup tasks (4:30am daily)
+    └── maintenance.js    # Cleanup tasks (4:30am, noon, 4pm daily)
 ```
 
 ## CLI Tool
@@ -276,7 +276,7 @@ All scheduled tasks run in America/Phoenix timezone:
 
 | Time | Frequency | Task | Details |
 |------|-----------|------|---------|
-| 4:30 AM | Every day | Maintenance | Clean up old completed tasks |
+| 4:30 AM, 12:00 PM, 4:00 PM | Every day | Maintenance | Auto-close items whose Google Task was completed |
 | 5:00 AM | Mon-Fri | Daily digest | Generate top 3 actions, show incomplete tasks |
 | 5:00 PM | Sunday | Weekly digest | Weekly review, task cleanup |
 | 7am-3pm | Weekdays | Calendar sync | Sync 1 day ahead (hourly) |

@@ -115,7 +115,7 @@ src/
 
 The scheduler (node-cron) manages these tasks in America/Phoenix timezone:
 
-- **4:30 AM (every day)**: Daily maintenance (task cleanup)
+- **4:30 AM, 12:00 PM, 4:00 PM (every day)**: Daily maintenance (auto-close items whose Google Task was completed)
 - **5:00 AM (Mon-Fri)**: Daily digest generation
 - **8:00 PM (Sundays)**: Weekly orphan cleanup + weekly digest generation
 - **7am-3pm (weekdays, hourly)**: Calendar sync (1 day ahead)

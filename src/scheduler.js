@@ -7,6 +7,7 @@ const { runCalendarSync } = require('./calendar/sync');
 let dailyJob = null;
 let weeklyJob = null;
 let maintenanceJob = null;
+let maintenanceAfternoonJob = null;
 let calSyncHourlyJob = null;
 let calSyncMonThuJob = null;
 let calSyncFridayJob = null;
@@ -26,15 +27,22 @@ const startScheduler = () => {
 
 
 
-  // Daily maintenance at 4:30 AM Phoenix time, every day
-  maintenanceJob = cron.schedule('30 4 * * *', async () => {
+  const maintenanceTask = async () => {
     console.log('Running scheduled daily maintenance...');
     try {
       await runDailyMaintenance();
     } catch (error) {
       console.error('Daily maintenance failed:', error);
     }
-  }, {
+  };
+
+  // Daily maintenance at 4:30 AM Phoenix time, every day
+  maintenanceJob = cron.schedule('30 4 * * *', maintenanceTask, {
+    timezone: 'America/Phoenix'
+  });
+
+  // ...and again at noon and 4:00 PM, so items finished during the day close the same day
+  maintenanceAfternoonJob = cron.schedule('0 12,16 * * *', maintenanceTask, {
     timezone: 'America/Phoenix'
   });
 
@@ -94,7 +102,7 @@ const startScheduler = () => {
   });
 
   console.log('Scheduler started:');
-  console.log('  - Daily maintenance: 4:30 AM (Every day)');
+  console.log('  - Daily maintenance: 4:30 AM, 12:00 PM, 4:00 PM (Every day)');
   console.log('  - Daily digest: 5:00 AM (Mon-Fri)');
   console.log('  - Weekly orphan cleanup + digest: Sunday 8:00 PM');
   console.log('  - Calendar sync: Weekdays 7am-3pm hourly (1 day ahead)');
@@ -114,6 +122,10 @@ const stopScheduler = () => {
   if (maintenanceJob) {
     maintenanceJob.stop();
     maintenanceJob = null;
+  }
+  if (maintenanceAfternoonJob) {
+    maintenanceAfternoonJob.stop();
+    maintenanceAfternoonJob = null;
   }
   if (calSyncHourlyJob) {
     calSyncHourlyJob.stop();
