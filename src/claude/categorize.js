@@ -11,9 +11,11 @@ const {
 // LLM responses can occasionally come back malformed (empty content, no text
 // block) when a provider hiccups. Extracting through one helper means every
 // call site gets a clear error instead of a raw "Cannot read properties of
-// undefined" and callers can decide how to fail soft.
+// undefined" and callers can decide how to fail soft. The Anthropic provider
+// may lead with non-text blocks (e.g. an empty "thinking" block), so look for
+// the first text block rather than assuming index 0.
 const extractResponseText = (response) => {
-  const text = response?.content?.[0]?.text;
+  const text = response?.content?.find(block => typeof block?.text === 'string')?.text;
   if (typeof text !== 'string') {
     throw new Error(`LLM response missing text content: ${JSON.stringify(response)?.slice(0, 500)}`);
   }
