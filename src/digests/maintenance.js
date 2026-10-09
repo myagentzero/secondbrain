@@ -5,7 +5,8 @@ const {
   updateAdminEntry,
   updatePeopleEntry,
   queryAllRecordsFromDatabase,
-  queryAllInboxLogRecordIds
+  queryAllInboxLogRecordIds,
+  getSlackThreadTs
 } = require('../notion/databases');
 const { matchCompletedTasksToInbox } = require('../claude/categorize');
 const { listCompletedTasks } = require('../tasks/tasks');
@@ -62,7 +63,7 @@ const runDailyMaintenance = async () => {
 
         const notionRecordId = entry.properties?.['Notion Record ID']?.rich_text?.[0]?.plain_text;
         const filedTo = entry.properties?.['Filed-To']?.select?.name;
-        const threadTs = entry.properties?.['Slack Thread TS']?.rich_text?.[0]?.plain_text;
+        const threadTs = getSlackThreadTs(entry);
 
         // Update inbox log status to Done
         await updateInboxLogEntry(entry.id, { status: 'Done' });
@@ -78,8 +79,10 @@ const runDailyMaintenance = async () => {
           }
         }
 
-        // Post Slack thread reply
-        if (threadTs) {
+        // Post Slack thread reply (rows created outside Slack have no thread to reply to)
+        if (!threadTs) {
+          console.log(`No Slack thread for ${match.inboxDestinationName}; skipping Slack reply`);
+        } else {
           const reply = await app.client.chat.postMessage({
             channel,
             text: `Auto-closed: matched completed task "${match.matchedTaskTitle}"`,

@@ -99,9 +99,13 @@ const createInboxLogEntry = async ({
     'Filed-To': { select: { name: filedTo || destination } },
     'Destination Name': { rich_text: rt(destinationName || '') },
     'Created': { date: { start: getMSTDate() } },
-    'Created by': { select: { name: APP_NAME } },
-    'Slack Thread TS': { rich_text: rt(slackThreadTs || '') }
+    'Created by': { select: { name: APP_NAME } }
   };
+
+  // Rows from other sources (e.g. parakeet-notes) have no Slack thread
+  if (slackThreadTs) {
+    properties['Slack Thread TS'] = { rich_text: rt(slackThreadTs) };
+  }
 
   if (destinationUrl) {
     properties['Destination URL'] = { url: destinationUrl };
@@ -257,8 +261,16 @@ const createAdminEntry = async ({ name, notes, status, dueDate }) => {
   });
 };
 
+// Slack thread timestamp of an Inbox Log row, or null for rows with none (e.g. created by
+// another app such as parakeet-notes)
+const getSlackThreadTs = (entry) =>
+  plainText(entry?.properties?.['Slack Thread TS']?.rich_text).trim() || null;
+
 // Find Inbox Log entry by Slack thread timestamp
 const findInboxLogByThreadTs = async (threadTs) => {
+  // An empty filter value would match every row that has no thread, so never query without one
+  if (!threadTs) return null;
+
   const { inboxLog } = getDatabaseIds();
 
   const response = await queryDatabase({
@@ -561,6 +573,7 @@ module.exports = {
   createProjectsEntry,
   createAdminEntry,
   findInboxLogByThreadTs,
+  getSlackThreadTs,
   findInboxLogByRecordId,
   updateInboxLogEntry,
   archivePage,

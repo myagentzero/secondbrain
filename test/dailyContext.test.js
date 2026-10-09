@@ -54,3 +54,12 @@ test('mergeText puts new text first and skips repeats', () => {
   assert.strictEqual(mergeText('old', 'new'), 'new\nold');
   assert.strictEqual(mergeText('new\nold', 'new'), 'new\nold');
 });
+
+test('rows without a Slack thread (e.g. from parakeet-notes) yield no thread TS', () => {
+  const { getSlackThreadTs } = require('../src/notion/databases');
+  assert.strictEqual(getSlackThreadTs({ properties: { 'Slack Thread TS': { rich_text: [] } } }), null);
+  assert.strictEqual(getSlackThreadTs({ properties: {} }), null);
+  assert.strictEqual(getSlackThreadTs(undefined), null);
+  assert.strictEqual(getSlackThreadTs({ properties: { 'Slack Thread TS': { rich_text: [{ plain_text: ' ' }] } } }), null);
+  assert.strictEqual(getSlackThreadTs({ properties: { 'Slack Thread TS': { rich_text: [{ plain_text: '1760000000.000100' }] } } }), '1760000000.000100');
+});
