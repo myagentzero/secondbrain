@@ -285,20 +285,26 @@ const findInboxLogByThreadTs = async (threadTs) => {
   return response.results[0] || null;
 };
 
-// Find Inbox Log entry by the Notion record it was filed to
-const findInboxLogByRecordId = async (recordId) => {
+// A record can have several Inbox Log rows (repeat captures, other apps), so promote every
+// Backlog row filed to it. Rows already Done or otherwise past Backlog are left alone.
+// Returns the number of rows updated.
+const activateInboxLogEntries = async (recordId) => {
   const { inboxLog } = getDatabaseIds();
 
-  const response = await queryDatabase({
+  const { results } = await queryAll({
     database_id: inboxLog,
     filter: {
-      property: 'Notion Record ID',
-      rich_text: { equals: recordId }
-    },
-    page_size: 1
+      and: [
+        { property: 'Notion Record ID', rich_text: { equals: recordId } },
+        { property: 'Status', select: { equals: 'Backlog' } }
+      ]
+    }
   });
 
-  return response.results[0] || null;
+  for (const entry of results) {
+    await updateInboxLogEntry(entry.id, { status: 'Active' });
+  }
+  return results.length;
 };
 
 // Update Inbox Log entry
@@ -574,7 +580,7 @@ module.exports = {
   createAdminEntry,
   findInboxLogByThreadTs,
   getSlackThreadTs,
-  findInboxLogByRecordId,
+  activateInboxLogEntries,
   updateInboxLogEntry,
   archivePage,
   updateProjectsEntry,

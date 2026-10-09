@@ -85,7 +85,7 @@ src/
 **src/digests/daily.js** - Daily digest at 5am (weekdays only):
 - Shows existing incomplete Google Tasks
 - Generates Top 3 Actions with Claude, favoring Backlog items
-- Creates Google Tasks for suggestions, then marks each source record (and its Inbox Log entry) Active
+- Creates Google Tasks for suggestions, then marks each source record (and all its Backlog Inbox Log rows) Active
 - Posts to Slack
 
 **src/digests/weekly.js** - Weekly digest at 8pm Sunday:

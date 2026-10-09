@@ -3,8 +3,7 @@ const {
   queryPeopleWithFollowUps,
   queryOverdueAdmin,
   queryUpcomingAdmin,
-  findInboxLogByRecordId,
-  updateInboxLogEntry,
+  activateInboxLogEntries,
   updateProjectsEntry,
   updatePeopleEntry,
   updateAdminEntry
@@ -87,9 +86,8 @@ const activateTaskedRecords = async (createdTasks, updaters) => {
   for (const id of ids) {
     try {
       await updaters.get(id)(id, { status: 'Active' });
-      const inboxEntry = await findInboxLogByRecordId(id);
-      if (inboxEntry) await updateInboxLogEntry(inboxEntry.id, { status: 'Active' });
-      console.log(`Marked ${id} Active`);
+      const rows = await activateInboxLogEntries(id);
+      console.log(`Marked ${id} Active (${rows} Inbox Log row(s))`);
     } catch (error) {
       console.error(`Failed to mark ${id} Active:`, error.message);
     }
