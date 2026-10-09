@@ -124,7 +124,7 @@ const createPeopleEntry = async ({ name, status, context, followUps, tags }) => 
 
   const properties = {
     'Name': { title: rt(name) },
-    'Status': { select: { name: status || 'Active' } },
+    'Status': { select: { name: status || 'Backlog' } },
     'Last Touched': { date: { start: getMSTDate() } }
   };
 
@@ -150,7 +150,7 @@ const createProjectsEntry = async ({ name, status, nextAction, notes, tags }) =>
 
   const properties = {
     'Name': { title: rt(name) },
-    'Status': { select: { name: status || 'Active' } },
+    'Status': { select: { name: status || 'Backlog' } },
     'Last Touched': { date: { start: getMSTDate() } }
   };
 
@@ -170,38 +170,13 @@ const createProjectsEntry = async ({ name, status, nextAction, notes, tags }) =>
   });
 };
 
-// Create Ideas entry
-const createIdeasEntry = async ({ name, oneLiner, notes, tags }) => {
-  const { ideas } = getDatabaseIds();
-
-  const properties = {
-    'Name': { title: rt(name) },
-    'Last Touched': { date: { start: getMSTDate() } }
-  };
-
-  if (oneLiner) {
-    properties['One-Liner'] = { rich_text: rt(oneLiner) };
-  }
-  if (notes) {
-    properties['Notes'] = { rich_text: rt(notes) };
-  }
-  if (tags && tags.length > 0) {
-    properties['Tags'] = { multi_select: tags.map(t => ({ name: t })) };
-  }
-
-  return createPage({
-    parent: { database_id: ideas },
-    properties
-  });
-};
-
 // Create Admin entry
 const createAdminEntry = async ({ name, notes, status, dueDate }) => {
   const { admin } = getDatabaseIds();
 
   const properties = {
     'Name': { title: rt(name) },
-    'Status': { select: { name: status || 'Active' } },
+    'Status': { select: { name: status || 'Backlog' } },
     'Created': { date: { start: getMSTDate() } },
     'Last Touched': { date: { start: getMSTDate() } }
   };
@@ -227,6 +202,22 @@ const findInboxLogByThreadTs = async (threadTs) => {
     filter: {
       property: 'Slack Thread TS',
       rich_text: { equals: threadTs }
+    },
+    page_size: 1
+  });
+
+  return response.results[0] || null;
+};
+
+// Find Inbox Log entry by the Notion record it was filed to
+const findInboxLogByRecordId = async (recordId) => {
+  const { inboxLog } = getDatabaseIds();
+
+  const response = await queryDatabase({
+    database_id: inboxLog,
+    filter: {
+      property: 'Notion Record ID',
+      rich_text: { equals: recordId }
     },
     page_size: 1
   });
@@ -330,23 +321,23 @@ const queryAll = async (params) => {
   return { results };
 };
 
-// Query active projects (for daily digest)
+// OR filter matching any of the given Status values
+const statusIn = (...names) => ({
+  or: names.map(name => ({ property: 'Status', select: { equals: name } }))
+});
+
+// Query projects the digest can draw from: Backlog (not yet tasked) or Active
 const queryActiveProjects = async () => {
   const { projects } = getDatabaseIds();
 
   return queryDatabase({
     database_id: projects,
-    filter: {
-      or: [
-        { property: 'Status', select: { equals: 'Active' } },
-        { property: 'Status', select: { equals: 'Waiting' } }
-      ]
-    },
+    filter: statusIn('Backlog', 'Active'),
     page_size: 20
   });
 };
 
-// Query active/waiting people who have a follow-up written down (for daily digest)
+// Query backlog/active people who have a follow-up written down (for daily digest)
 const queryPeopleWithFollowUps = async () => {
   const { people } = getDatabaseIds();
 
@@ -354,12 +345,7 @@ const queryPeopleWithFollowUps = async () => {
     database_id: people,
     filter: {
       and: [
-        {
-          or: [
-            { property: 'Status', select: { equals: 'Active' } },
-            { property: 'Status', select: { equals: 'Waiting' } }
-          ]
-        },
+        statusIn('Backlog', 'Active'),
         { property: 'Follow-ups', rich_text: { is_not_empty: true } }
       ]
     },
@@ -382,7 +368,7 @@ const queryOverdueAdmin = async () => {
             { property: 'Due Date', date: { is_empty: true } }
           ]
         },
-        { property: 'Status', select: { equals: 'Active' } }
+        statusIn('Backlog', 'Active')
       ]
     },
     page_size: 10,
@@ -399,7 +385,7 @@ const queryUpcomingAdmin = async () => {
     filter: {
       and: [
         { property: 'Due Date', date: { after: getMSTDate().split('T')[0] } },
-        { property: 'Status', select: { equals: 'Active' } }
+        statusIn('Backlog', 'Active')
       ]
     },
     page_size: 10,
@@ -420,48 +406,34 @@ const queryWeekInboxLog = async () => {
   });
 };
 
-// Query all active/waiting/blocked projects (for weekly digest)
+// Query all backlog/active/blocked projects (for weekly digest)
 const queryAllOpenProjects = async () => {
   const { projects } = getDatabaseIds();
 
   return queryAll({
     database_id: projects,
-    filter: {
-      or: [
-        { property: 'Status', select: { equals: 'Active' } },
-        { property: 'Status', select: { equals: 'Waiting' } },
-        { property: 'Status', select: { equals: 'Blocked' } }
-      ]
-    }
+    filter: statusIn('Backlog', 'Active', 'Blocked')
   });
 };
 
-// Query all active admin tasks (for weekly digest)
+// Query all backlog/active admin tasks (for weekly digest)
 const queryAllOpenAdmin = async () => {
   const { admin } = getDatabaseIds();
 
   return queryAll({
     database_id: admin,
-    filter: {
-      property: 'Status', select: { equals: 'Active' }
-    },
+    filter: statusIn('Backlog', 'Active'),
     sorts: [{ property: 'Due Date', direction: 'ascending' }]
   });
 };
 
-// Query open inbox log entries (Active, Waiting, or Blocked)
+// Query open inbox log entries (Backlog, Active, or Blocked)
 const queryOpenInboxLog = async () => {
   const { inboxLog } = getDatabaseIds();
 
   return queryAll({
     database_id: inboxLog,
-    filter: {
-      or: [
-        { property: 'Status', select: { equals: 'Active' } },
-        { property: 'Status', select: { equals: 'Waiting' } },
-        { property: 'Status', select: { equals: 'Blocked' } }
-      ]
-    }
+    filter: statusIn('Backlog', 'Active', 'Blocked')
   });
 };
 
@@ -519,9 +491,9 @@ module.exports = {
   createInboxLogEntry,
   createPeopleEntry,
   createProjectsEntry,
-  createIdeasEntry,
   createAdminEntry,
   findInboxLogByThreadTs,
+  findInboxLogByRecordId,
   updateInboxLogEntry,
   archivePage,
   updateProjectsEntry,

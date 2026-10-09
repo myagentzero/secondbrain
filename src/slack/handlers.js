@@ -4,7 +4,6 @@ const {
   createInboxLogEntry,
   createPeopleEntry,
   createProjectsEntry,
-  createIdeasEntry,
   createAdminEntry,
   findInboxLogByThreadTs,
   updateInboxLogEntry,
@@ -37,9 +36,9 @@ const removeReaction = async (app, channel, timestamp, name) => {
 
 // Status keywords mapping (module-level for reuse)
 const statuses = {
+  'Backlog': ['backlog', 'queue', 'queued', 'someday', 'pending'],
   'Active': ['active', 'open', 'started', 'progress'],
-  'Waiting': ['waiting', 'someday', 'pending', 'hold'],
-  'Blocked': ['blocked', 'block', 'stuck', 'issue'],
+  'Blocked': ['blocked', 'block', 'stuck', 'issue', 'waiting', 'hold'],
   'Done': ['done', 'finish', 'finished', 'complete', 'completed', 'closed'],
 };
 
@@ -50,7 +49,6 @@ const parseCorrection = (message) => {
   const destinations = {
     'people': ['people', 'person',"employee", "contact"],
     'projects': ['projects', 'project'],
-    'ideas': ['ideas', 'idea'],
     'admin': ['admin', 'task', 'errand', "todo", "chore"]
   };
 
@@ -81,13 +79,6 @@ const createDestinationEntry = async (destination, data) => {
         name: data.name,
         status: data.status,
         nextAction: data.nextAction,
-        notes: data.notes,
-        tags: data.tags
-      });
-    case 'ideas':
-      return createIdeasEntry({
-        name: data.name,
-        oneLiner: data.oneLiner,
         notes: data.notes,
         tags: data.tags
       });
@@ -148,7 +139,7 @@ const setupHandlers = () => {
         });
 
         await say({
-          text: `I'm not sure how to classify this (confidence: ${result.confidence.toFixed(2)}). Please reply in the thread with one word: a status (Active, Waiting, Blocked, Done) or destination (People, Projects, Ideas, Admin).`,
+          text: `I'm not sure how to classify this (confidence: ${result.confidence.toFixed(2)}). Please reply in the thread with one word: a status (Backlog, Active, Blocked, Done) or destination (People, Projects, Admin).`,
           thread_ts: message.ts
         });
         return;
@@ -202,8 +193,8 @@ const handleCorrection = async (message, say) => {
   const parsed = parseCorrection(text);
   if (!parsed.newDestination && !parsed.newStatus) {
     const availableOptions = [
-      '*Statuses*: Active, Waiting, Blocked, Done',
-      '*Destinations*: People, Projects, Ideas, Admin'
+      '*Statuses*: Backlog, Active, Blocked, Done',
+      '*Destinations*: People, Projects, Admin'
     ];
     await say({
       text: `I don't recognize "${text}". Available one-word replies:\n\n${availableOptions.join('\n')}`,
@@ -232,11 +223,11 @@ const handleCorrection = async (message, say) => {
     if (parsed.newDestination) {
       console.log(`Re-categorizing to ${parsed.newDestination}`);
 
-      // A category update on a "Needs Review" item resolves the review → Active
-      const resolvedStatus = currentStatus === 'Needs Review' ? 'Active' : null;
+      // A category update on a "Needs Review" item resolves the review → Backlog
+      const resolvedStatus = currentStatus === 'Needs Review' ? 'Backlog' : null;
 
       // Get new classification from Claude
-      const reclassified = await reclassifyMessage(originalText, parsed.newDestination, resolvedStatus || 'Active');
+      const reclassified = await reclassifyMessage(originalText, parsed.newDestination, resolvedStatus || currentStatus || 'Backlog');
 
       // Create new entry in destination database
       const destEntry = await createDestinationEntry(parsed.newDestination, reclassified);

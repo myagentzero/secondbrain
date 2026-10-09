@@ -154,7 +154,7 @@ const createDailyTasks = async (actions) => {
         notes: action.notes || '',
         due: action.due || null
       });
-      results.push(result);
+      results.push({ ...result, sourceId: action.sourceId || null });
       console.log(`Created task: ${action.title}`);
 
       // Rate limiting between API calls

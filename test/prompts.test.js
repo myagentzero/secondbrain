@@ -19,17 +19,17 @@ test('render leaves user text untouched ($ patterns and placeholders)', () => {
 test('categorization prompt is fully rendered and lists every destination', () => {
   const out = p.buildCategorizationPrompt('call Dan', NOW);
   assert.match(out, /July 20, 2026 \(Monday\)/);
-  for (const d of ['people', 'projects', 'ideas', 'admin', 'needs_review']) assert.ok(out.includes(d));
+  for (const d of ['people', 'projects', 'admin', 'needs_review']) assert.ok(out.includes(d));
   assert.ok(out.includes('0.6'));
   assert.ok(out.includes('<message>\ncall Dan\n</message>'));
   noPlaceholders(out.replace('{{TODAY}}', ''));
 });
 
 test('reclassification prompt fills category (twice) and defaults status', () => {
-  const out = p.buildReclassificationPrompt('idea text', 'ideas', undefined, NOW);
-  assert.equal(out.match(/ideas record/g).length, 1);
-  assert.ok(out.includes('"destination": "ideas"'));
-  assert.ok(out.includes('Status: Active'));
+  const out = p.buildReclassificationPrompt('task text', 'admin', undefined, NOW);
+  assert.equal(out.match(/admin record/g).length, 1);
+  assert.ok(out.includes('"destination": "admin"'));
+  assert.ok(out.includes('Status: Backlog'));
   noPlaceholders(out);
 });
 
@@ -83,4 +83,12 @@ test('digest prompts use the configured name, with a fallback and no leftover pl
     assert.ok(fallback.includes('The user is a Director of Engineering'));
     noPlaceholders(fallback);
   }
+});
+
+test('new records default to Backlog and only the digest activates them', () => {
+  const { buildCategorizationPrompt, buildDailyDigestPrompt } = require('../src/claude/prompts');
+  const cat = buildCategorizationPrompt('Call Sam');
+  assert.ok(cat.includes('starts as "Backlog"') && cat.includes('never output "Active"'));
+  assert.ok(p.buildReclassificationPrompt('x', 'admin').includes('Status: Backlog'));
+  assert.ok(buildDailyDigestPrompt('ctx').includes('sourceId'));
 });

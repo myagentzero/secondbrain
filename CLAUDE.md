@@ -14,7 +14,7 @@ Second Brain is an AI-powered productivity system that captures thoughts from Sl
 
 ### Required Credentials
 - **Slack**: Bot Token (`xoxb-...`) and App Token (`xapp-...`) for Socket Mode
-- **Notion**: Integration token and database IDs (5 databases needed)
+- **Notion**: Integration token and database IDs (4 databases needed)
 - **Google**: OAuth credentials for Calendar & Tasks APIs
 - **Anthropic**: API key for Claude categorization
 
@@ -48,7 +48,7 @@ src/
 │   └── handlers.js       # Message handlers (capture, fix, update)
 ├── notion/
 │   ├── client.js         # Notion API client
-│   └── databases.js      # CRUD operations for 5 databases
+│   └── databases.js      # CRUD operations for 4 databases
 ├── llm/
 │   └── client.js         # LLM abstraction (LiteLLM + Anthropic fallback)
 ├── claude/
@@ -72,19 +72,19 @@ src/
 
 **src/slack/handlers.js** - Message handlers for:
 - Capturing messages from `#secondbrain` channel
-- Categorizing with Claude AI (people/projects/ideas/admin, confidence > 0.6)
+- Categorizing with Claude AI (people/projects/admin, confidence > 0.6)
 - "fix:" replies for re-categorization
 - "update:" replies for status changes
 
 **src/notion/databases.js** - Manages:
 - Inbox Log (audit trail of all captures)
-- People, Projects, Ideas, Admin databases
+- People, Projects, Admin databases
 - CRUD operations and field updates
 
 **src/digests/daily.js** - Daily digest at 5am (weekdays only):
 - Shows existing incomplete Google Tasks
-- Generates Top 3 Actions with Claude
-- Creates Google Tasks for suggestions
+- Generates Top 3 Actions with Claude, favoring Backlog items
+- Creates Google Tasks for suggestions, then marks each source record (and its Inbox Log entry) Active
 - Posts to Slack
 
 **src/digests/weekly.js** - Weekly digest at 8pm Sunday:
@@ -95,7 +95,7 @@ src/
 
 **src/digests/maintenance.js** - Maintenance tasks:
 - **Daily**: Matches completed Google Tasks to open inbox items and auto-closes them
-- **Weekly**: Orphan cleanup — archives records from People/Ideas/Projects/Admin tables that aren't referenced in Inbox Log
+- **Weekly**: Orphan cleanup — archives records from People/Projects/Admin tables that aren't referenced in Inbox Log
 
 **src/calendar/sync.js** - Calendar sync logic:
 - Fetches events from shared Google calendars
@@ -126,10 +126,13 @@ The scheduler (node-cron) manages these tasks in America/Phoenix timezone:
 All databases have "Last Touched" date field and are linked from Inbox Log.
 
 - **Inbox Log**: Original Text, Filed-To, Destination Name, Confidence, Status, Slack Thread TS, Created
-- **People**: Name, Status (Active/Needs Review/Done), Context, Follow-ups, Tags
-- **Projects**: Name, Status (Active/Waiting/Blocked/Done), Next Action, Notes, Tags
-- **Ideas**: Name, One-Liner, Notes, Tags
-- **Admin**: Name, Status (Active/Done), Notes, Due Date, Created, Last Touched
+- **People**: Name, Status (Backlog/Active/Needs Review/Done), Context, Follow-ups, Tags
+- **Projects**: Name, Status (Backlog/Active/Blocked/Done), Next Action, Notes, Tags
+- **Admin**: Name, Status (Backlog/Active/Done), Notes, Due Date, Created, Last Touched
+
+## Status Lifecycle
+
+New captures start as **Backlog** (Inbox Log, People, Projects, Admin). A record becomes **Active** only when the daily digest adds it to Google Tasks (the digest cites the record via `sourceId`). Blocked/Done work as before.
 
 ## Important Notes
 

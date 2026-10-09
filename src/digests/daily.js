@@ -2,7 +2,12 @@ const {
   queryActiveProjects,
   queryPeopleWithFollowUps,
   queryOverdueAdmin,
-  queryUpcomingAdmin
+  queryUpcomingAdmin,
+  findInboxLogByRecordId,
+  updateInboxLogEntry,
+  updateProjectsEntry,
+  updatePeopleEntry,
+  updateAdminEntry
 } = require('../notion/databases');
 const { generateDailyDigestStructured, formatDigestForSlack } = require('../claude/categorize');
 const { createDailyTasks, listTasks, listCompletedTasks } = require('../tasks/tasks');
@@ -12,10 +17,12 @@ const { checkKeyExpiration } = require('../llm/client');
 const { memoryStore } = require('./memory');
 const { prop, section, fields } = require('./format');
 
-// One admin task: name plus due date and notes when present
+// One admin task: name plus ID, status, due date and notes when present
 const adminLines = (task, i) => [
   `${i + 1}. ${prop.title(task, 'Name') || 'Untitled'}`,
   ...fields([
+    ['ID', task.id],
+    ['Status', prop.select(task, 'Status')],
     ['Due', prop.date(task, 'Due Date') || 'No date'],
     ['Notes', prop.text(task, 'Notes')]
   ])
@@ -36,13 +43,18 @@ const buildDailyContext = (projects, people, admin, upcomingAdmin, keyAlert = nu
     section('ACTIVE PROJECTS', projects.results.flatMap((p, i) => [
       `${i + 1}. ${prop.title(p, 'Name') || 'Untitled'}`,
       ...fields([
+        ['ID', p.id],
         ['Status', prop.select(p, 'Status') || 'Unknown'],
         ['Next Action', prop.text(p, 'Next Action')]
       ])
     ])),
     section('PEOPLE TO FOLLOW UP WITH', peopleWithFollowUps.flatMap((p, i) => [
       `${i + 1}. ${prop.title(p, 'Name')}`,
-      ...fields([['Follow-up', prop.text(p, 'Follow-ups')]])
+      ...fields([
+        ['ID', p.id],
+        ['Status', prop.select(p, 'Status')],
+        ['Follow-up', prop.text(p, 'Follow-ups')]
+      ])
     ])),
     section('TASKS DUE', [
       ...alertLines,
@@ -55,6 +67,33 @@ const buildDailyContext = (projects, people, admin, upcomingAdmin, keyAlert = nu
 // Queries are capped to keep the prompt small; say so in the logs when rows are dropped
 const warnIfTruncated = (label, response) => {
   if (response.has_more) console.warn(`Daily digest: ${label} truncated to ${response.results.length} rows`);
+};
+
+// Record ID -> the updater for its Notion table, for the records shown to the LLM
+const buildRecordUpdaters = (projects, people, admin, upcomingAdmin) => {
+  const updaters = new Map();
+  const add = (response, updater) => response.results.forEach(page => updaters.set(page.id, updater));
+  add(projects, updateProjectsEntry);
+  add(people, updatePeopleEntry);
+  add(admin, updateAdminEntry);
+  add(upcomingAdmin, updateAdminEntry);
+  return updaters;
+};
+
+// A record becomes Active once it has a Google Task. Ignores IDs the LLM made up.
+const activateTaskedRecords = async (createdTasks, updaters) => {
+  const ids = [...new Set(createdTasks.map(t => t.sourceId).filter(id => updaters.has(id)))];
+
+  for (const id of ids) {
+    try {
+      await updaters.get(id)(id, { status: 'Active' });
+      const inboxEntry = await findInboxLogByRecordId(id);
+      if (inboxEntry) await updateInboxLogEntry(inboxEntry.id, { status: 'Active' });
+      console.log(`Marked ${id} Active`);
+    } catch (error) {
+      console.error(`Failed to mark ${id} Active:`, error.message);
+    }
+  }
 };
 
 const runDailyDigest = async () => {
@@ -127,7 +166,8 @@ const runDailyDigest = async () => {
     // Create Google Tasks for Top 3 Actions
     try {
       if (digest.newTasks && digest.newTasks.length > 0) {
-        await createDailyTasks(digest.newTasks);
+        const created = await createDailyTasks(digest.newTasks);
+        await activateTaskedRecords(created, buildRecordUpdaters(projects, people, admin, upcomingAdmin));
       } else {
         console.log('No actions to create tasks for');
       }

@@ -26,7 +26,7 @@ const userVars = (userName) => {
   };
 };
 
-const STATUS_RULES = `- Status for people: "Active", "Needs Review", or "Done". Status for projects and admin: "Active", "Waiting", "Blocked", or "Done".
+const STATUS_RULES = `- Status: every new record starts as "Backlog". A record only becomes "Active" later, when the daily digest adds it to the Google Task list, so never output "Active". Use "Blocked" or "Done" only when the message clearly says so; people may also be "Needs Review".
 - "next_action" must be specific and executable. Bad: "Work on website". Good: "Email Sarah to confirm deadline".
 - Resolve relative dates ("tomorrow", "Friday") against today's date and format as YYYY-MM-DD. "due_date" must be a future date; otherwise null.
 - Use [] for tags when none clearly apply.`;
@@ -35,7 +35,6 @@ const STATUS_RULES = `- Status for people: "Active", "Needs Review", or "Done". 
 // is added by the categorization prompt only.
 const RECORD_SCHEMAS = `people:   {"name", "status", "context" (how you know them / their role), "follow_ups", "tags": []}
 projects: {"name", "status", "next_action", "notes", "tags": []}
-ideas:    {"name", "one_liner" (core insight, one sentence), "notes", "tags": []}
 admin:    {"name", "status", "due_date" (YYYY-MM-DD or null), "notes" (context and details to follow up on)}`;
 
 const CATEGORIZATION_PROMPT = `Categorize the captured message below and extract its fields.
@@ -49,7 +48,6 @@ Today is {{TODAY}} ({{DAY_OF_WEEK}}).
 # Categories
 - "people": information about a person, a relationship update, something someone said.
 - "projects": ongoing work with multiple steps or no clear end date.
-- "ideas": a thought, insight, or concept to explore later.
 - "admin": a one-off errand or task, meeting/event prep, anything with a due date, or a reminder. A one-off task stays admin even when it involves another person ("finalize the agenda with Dan on Monday", "complete pre-work for the offsite by 7/27").
 
 Ticket heuristic: a Jira ticket (or "ticket(s)" in a Jira-like engineering context) defaults to "projects" because it implies ongoing multi-step work. A ServiceNow ticket defaults to "admin" because it is usually a one-off request.
@@ -61,7 +59,7 @@ Below 0.6, use destination "needs_review".
 
 # Output
 Return only a JSON object with no markdown:
-{"destination": "<people|projects|ideas|admin>", "confidence": <number>, "data": {<fields>}}
+{"destination": "<people|projects|admin>", "confidence": <number>, "data": {<fields>}}
 
 Fields by destination:
 ${RECORD_SCHEMAS}
@@ -75,7 +73,7 @@ const RECLASSIFICATION_PROMPT = `Extract structured data from the text below for
 {{TEXT}}
 </text>
 
-Status: {{STATUS}}
+Status: {{STATUS}} (use this exact value for "status")
 Today is {{TODAY}} ({{DAY_OF_WEEK}}).
 
 Return only a JSON object with no markdown:
@@ -95,22 +93,25 @@ Today is {{DATE}} ({{DAY_OF_WEEK}}).
 </data>
 {{EXISTING_TASKS}}{{COMPLETED_TASKS}}
 # Reading the data
+- Every item has an ID and a Status. "Backlog" means captured but not yet on the Google Task list; "Active" means it already has (or had) a task.
 - TASKS DUE: admin tasks that are due today, overdue, or have no due date. An [URGENT] item is a system alert that comes first.
 - UPCOMING TASKS: due later; use them to spot what to start early, not as today's work.
-- ACTIVE PROJECTS: Waiting projects are blocked on someone else, so they rarely need a new task.
+- ACTIVE PROJECTS: includes Backlog and Active projects.
 - PEOPLE TO FOLLOW UP WITH: people with an open follow-up.
 
 # Output
 Return only a JSON object with no markdown:
 {
-  "newTasks": [{"title": "...", "notes": "..."}],
+  "newTasks": [{"title": "...", "notes": "...", "sourceId": "<ID of the item it comes from>" or null}],
   "peopleToConnect": [{"name": "...", "followUp": "..."}],
   "watchOutFor": "..." or null,
   "smallWin": "..." or null
 }
 
 # Rules
-- newTasks: up to 3, most important first, [] if nothing qualifies. Rank [URGENT] items, then overdue tasks, then next actions on Active projects.
+- newTasks: up to 3, most important first, [] if nothing qualifies. Rank [URGENT] items, then overdue tasks, then next actions on projects.
+- Fill the queue from Backlog first: an item only moves to Active when it becomes a task, so promote Backlog items that are due, overdue, or the clear next priority. Set sourceId to that item's ID exactly as given; use null for [URGENT] alerts or anything not tied to an item.
+- An Active item already has a task, so only add another for it when existing_tasks has nothing covering its next step.
 - Each title is a specific action {{USER}} can do today, not motivation. Bad: "Work on website". Good: "Email Sarah to confirm deadline".
 - notes: under 150 characters, naming the project, person, or due date the task comes from.
 - Skip anything already in existing_tasks, and do not recreate anything in completed_tasks.
@@ -138,7 +139,7 @@ This week's captures (total and by category) and tasks completed, compared with 
 ## What Moved Forward
 Projects with a recent Last Touched date, and items from COMPLETED TASKS LAST WEEK.
 ## Open Loops (needs attention)
-Blocked, stalled, or waiting items from ACTIVE PROJECTS STATUS and ACTIVE ADMIN TASKS. Flag projects and admin tasks last touched over a week ago (use Created for admin tasks with no Last Touched).
+Blocked or stalled items from OPEN PROJECTS and OPEN ADMIN TASKS. Flag projects and admin tasks last touched over a week ago (use Created for admin tasks with no Last Touched). Items with Status "Backlog" were captured but never added to the Google Task list; call out the ones sitting in Backlog over a week.
 ## Needs Review
 Each NEEDS REVIEW item with a one-line reason it is ambiguous.
 ## Week Ahead: Meetings to Prep For
@@ -146,7 +147,7 @@ From UPCOMING MEETINGS THIS WEEK, only meetings likely to need prep (external, p
 ## Patterns I Notice
 One observation about themes or where energy is going, drawn from ITEMS CAPTURED LAST WEEK and WEEKLY TREND (for example a category growing or shrinking, or captures outpacing completions). Cite only trends the data supports; with no prior weeks, don't claim any.
 ## Suggested Focus for Next Week
-Three numbered, concrete actions, highest priority first, each grounded in a project, admin task, or meeting from the data.
+Three numbered, concrete actions, highest priority first, each grounded in a project, admin task, or meeting from the data. Favor promoting Backlog items (due soon or long untouched) so they get onto the task list.
 
 # Style
 Analytical, concise, and direct; say plainly when something looks stuck. Use bullets, not tables (the output is posted to Slack). Emojis sparingly.
@@ -181,7 +182,7 @@ const buildReclassificationPrompt = (text, category, status, now) => {
   return render(RECLASSIFICATION_PROMPT, {
     CATEGORY: category,
     TEXT: text,
-    STATUS: status || 'Active',
+    STATUS: status || 'Backlog',
     TODAY: date,
     DAY_OF_WEEK: dayOfWeek
   });

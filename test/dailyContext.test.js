@@ -23,7 +23,7 @@ test('daily context omits empty sections and people without follow-ups', () => {
   assert.strictEqual(buildDailyContext(empty, empty, empty, empty), '');
   const out = buildDailyContext(empty, { results: [person('Ann', 'Send deck'), person('Bob', '')] }, empty, empty);
   assert.ok(out.includes('1. Ann') && out.includes('Follow-up: Send deck'));
-  assert.ok(!out.includes('Bob') && !out.includes('Status:'));
+  assert.ok(!out.includes('Bob'));
 });
 
 test('key alert is numbered first and tasks continue the numbering', () => {
@@ -31,6 +31,13 @@ test('key alert is numbered first and tasks continue the numbering', () => {
   const out = buildDailyContext(empty, empty, { results: [admin('File taxes', '2026-10-04')] }, empty, alert);
   assert.ok(out.indexOf('1. Renew key [URGENT]') < out.indexOf('2. File taxes'));
   assert.ok(out.includes('Due: 2026-10-04') && !out.includes('Notes: undefined'));
+});
+
+test('daily context exposes record IDs and statuses so tasks can cite their source', () => {
+  const task = { id: 'abc-123', ...admin('File taxes', '2026-10-04') };
+  task.properties.Status = { select: { name: 'Backlog' } };
+  const out = buildDailyContext(empty, empty, { results: [task] }, empty);
+  assert.ok(out.includes('ID: abc-123') && out.includes('Status: Backlog'));
 });
 
 test('events match on title and start instant, not title alone', () => {

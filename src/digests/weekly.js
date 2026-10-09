@@ -46,8 +46,8 @@ const formatUpcomingEvents = (events) =>
     return `${i + 1}. [${when}] ${event.summary}${event.location ? ' @ ' + event.location : ''}`;
   }));
 
-const formatActiveProjects = (projects) =>
-  section('ACTIVE PROJECTS STATUS', projects.flatMap((p, i) => [
+const formatOpenProjects = (projects) =>
+  section('OPEN PROJECTS', projects.flatMap((p, i) => [
     `${i + 1}. ${prop.title(p, 'Name') || 'Untitled'}`,
     ...fields([
       ['Status', prop.select(p, 'Status') || 'Unknown'],
@@ -56,10 +56,11 @@ const formatActiveProjects = (projects) =>
     ])
   ]));
 
-const formatActiveAdminTasks = (adminTasks) =>
-  section('ACTIVE ADMIN TASKS', adminTasks.flatMap((task, i) => [
+const formatOpenAdminTasks = (adminTasks) =>
+  section('OPEN ADMIN TASKS', adminTasks.flatMap((task, i) => [
     `${i + 1}. ${prop.title(task, 'Name') || 'Untitled'}`,
     ...fields([
+      ['Status', prop.select(task, 'Status')],
       ['Notes', prop.text(task, 'Notes')],
       ['Due', prop.date(task, 'Due Date')],
       ['Created', prop.date(task, 'Created') || 'Unknown'],
@@ -76,8 +77,8 @@ const buildWeeklyContext = (inboxLog, projects, adminTasks, needsReviewItems, up
   return [
     section('ITEMS CAPTURED LAST WEEK', captured.map(inboxLine)),
     trendSection,
-    formatActiveProjects(projects.results),
-    formatActiveAdminTasks(adminTasks.results),
+    formatOpenProjects(projects.results),
+    formatOpenAdminTasks(adminTasks.results),
     section('NEEDS REVIEW', needsReviewItems.results.map(inboxLine)),
     formatUpcomingEvents(upcomingEvents)
   ].join('');

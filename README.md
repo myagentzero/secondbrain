@@ -5,7 +5,7 @@ A self-hosted productivity system that captures thoughts from Slack, categorizes
 ## Features
 
 - **Capture**: Listen for messages in `#secondbrain` Slack channel
-- **Categorize**: Claude Haiku classifies into people/projects/ideas/admin (confidence > 0.6)
+- **Categorize**: Claude Haiku classifies into people/projects/admin (confidence > 0.6)
 - **Store**: Create entries in appropriate Notion database + Inbox Log audit trail
 - **Correct**: Handle "fix:" and "update:" replies to re-categorize or change status
 - **Digest**: Daily (5am) and weekly (Sunday 5pm) summaries with Google Tasks integration
@@ -17,7 +17,7 @@ A self-hosted productivity system that captures thoughts from Slack, categorizes
 |-------|------|------|
 | Capture | Slack `#secondbrain` channel | Free |
 | Automation | Node.js on Raspberry Pi | $0 |
-| Storage | Notion (5 databases) | Free |
+| Storage | Notion (4 databases) | Free |
 | AI | Claude API (Haiku) | ~$1-2/month |
 | Delivery | Slack + Google Tasks | Free |
 
@@ -55,7 +55,7 @@ A self-hosted productivity system that captures thoughts from Slack, categorizes
 
 1. Go to https://www.notion.so/my-integrations
 2. Create new integration with read/write access
-3. Create 5 databases: Inbox Log, Admin, Ideas, Projects, People
+3. Create 4 databases: Inbox Log, Admin, Projects, People
 4. Share each database with the integration
 5. Copy integration token and database IDs to `credentials.json`
 
@@ -137,7 +137,6 @@ Reply to any captured message with:
 For clearer classification, use prefixes:
 - `person: ...` for people
 - `project: ...` for projects
-- `idea: ...` for ideas
 - `admin: ...` for tasks/errands
 
 ## Architecture
@@ -153,7 +152,7 @@ src/
 │   └── handlers.js       # Message handlers (capture, fix, update)
 ├── notion/
 │   ├── client.js         # Notion API client
-│   └── databases.js      # CRUD for all 5 databases + Inbox Log
+│   └── databases.js      # CRUD for all 4 databases + Inbox Log
 ├── llm/
 │   └── client.js         # LLM abstraction (LiteLLM with Anthropic fallback)
 ├── claude/
@@ -234,22 +233,15 @@ The digest system integrates with Google Tasks to provide better context:
 
 ### Projects
 - Name (title)
-- Status (select: Active/Waiting/Blocked/Done)
+- Status (select: Backlog/Active/Blocked/Done)
 - Next Action (text)
-- Notes (text)
-- Tags (multi-select)
-- Last Touched (date)
-
-### Ideas
-- Name (title)
-- One-Liner (text)
 - Notes (text)
 - Tags (multi-select)
 - Last Touched (date)
 
 ### Admin
 - Name (title)
-- Status (select: Active/Done)
+- Status (select: Backlog/Active/Done)
 - Notes (text)
 - Due Date (date)
 - Created (date)

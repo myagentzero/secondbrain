@@ -46,7 +46,7 @@ const parseCategorizationResponse = (response) => {
       confidence: parsed.confidence,
       data: parsed.data,
       name: parsed.data.name || parsed.data.original_text || 'Untitled',
-      status: parsed.data.status || 'Active',
+      status: parsed.data.status || 'Backlog',
       nextAction: parsed.data.next_action || null,
       context: parsed.data.context || null,
       followUps: parsed.data.follow_ups || null,

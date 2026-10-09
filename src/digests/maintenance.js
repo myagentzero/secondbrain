@@ -67,7 +67,7 @@ const runDailyMaintenance = async () => {
         // Update inbox log status to Done
         await updateInboxLogEntry(entry.id, { status: 'Done' });
 
-        // Update destination record (skip ideas — no status field)
+        // Update destination record
         if (notionRecordId) {
           if (filedTo === 'projects') {
             await updateProjectsEntry(notionRecordId, { status: 'Done' });
@@ -120,7 +120,7 @@ const runWeeklyOrphanCleanup = async () => {
   try {
     const notion = require('../notion/client').getClient();
     const config = getNotionConfig();
-    const { people, ideas, projects, admin } = config.databases;
+    const { people, projects, admin } = config.databases;
 
     // Fetch all inbox log record IDs
     const inboxRecordIds = await queryAllInboxLogRecordIds();
@@ -134,10 +134,9 @@ const runWeeklyOrphanCleanup = async () => {
 
     let deleted = 0;
 
-    // Process each of the four tables
+    // Process each of the three tables
     for (const [tableName, databaseId] of [
       ['People', people],
-      ['Ideas', ideas],
       ['Projects', projects],
       ['Admin', admin]
     ]) {
