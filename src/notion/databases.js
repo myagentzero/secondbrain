@@ -144,6 +144,66 @@ const createPeopleEntry = async ({ name, status, context, followUps, tags }) => 
   });
 };
 
+// Text of a rich_text/title property, joined across segments
+const plainText = (parts) => (parts || []).map(part => part.plain_text).join('');
+
+// Combine existing and new text, newest first (Notion caps field length, so the oldest is what gets cut).
+// Skips the addition when it is already there.
+const mergeText = (existing, addition) => {
+  if (!addition) return existing || '';
+  if (!existing) return addition;
+  return existing.includes(addition) ? existing : `${addition}\n${existing}`;
+};
+
+// Find an existing People record by name (case-insensitive, ignoring surrounding spaces)
+const findPeopleByName = async (name) => {
+  const { people } = getDatabaseIds();
+  const wanted = String(name || '').trim().toLowerCase();
+  if (!wanted) return null;
+
+  const response = await queryDatabase({
+    database_id: people,
+    filter: { property: 'Name', title: { contains: String(name).trim() } },
+    page_size: 20
+  });
+
+  return response.results.find(page => plainText(page.properties?.Name?.title).trim().toLowerCase() === wanted) || null;
+};
+
+// Fold a new capture into an existing People record. A Done person comes back as Backlog with
+// context and follow-ups replaced; any other status is left alone and text is merged. Returns { page, reopened }.
+const updatePersonFromCapture = async (existing, { context, followUps, tags }) => {
+  const props = existing.properties || {};
+  const reopened = props.Status?.select?.name === 'Done';
+
+  const properties = {
+    'Last Touched': { date: { start: getMSTDate() } }
+  };
+  if (reopened) {
+    properties['Status'] = { select: { name: 'Backlog' } };
+  }
+  // A reopened (Done) person starts fresh: their old context and follow-ups are stale, so replace
+  // them outright, even clearing them when the new capture has none. Otherwise new text goes first.
+  if (reopened) {
+    properties['Context'] = { rich_text: rt(context || '') };
+    properties['Follow-ups'] = { rich_text: rt(followUps || '') };
+  } else {
+    if (context) {
+      properties['Context'] = { rich_text: rt(mergeText(plainText(props.Context?.rich_text), context)) };
+    }
+    if (followUps) {
+      properties['Follow-ups'] = { rich_text: rt(mergeText(plainText(props['Follow-ups']?.rich_text), followUps)) };
+    }
+  }
+  if (tags && tags.length > 0) {
+    const names = new Set([...(props.Tags?.multi_select || []).map(t => t.name), ...tags]);
+    properties['Tags'] = { multi_select: [...names].map(name => ({ name })) };
+  }
+
+  const page = await updatePage({ page_id: existing.id, properties });
+  return { page, reopened };
+};
+
 // Create Projects entry
 const createProjectsEntry = async ({ name, status, nextAction, notes, tags }) => {
   const { projects } = getDatabaseIds();
@@ -490,6 +550,9 @@ const queryAllInboxLogRecordIds = async () => {
 module.exports = {
   createInboxLogEntry,
   createPeopleEntry,
+  findPeopleByName,
+  updatePersonFromCapture,
+  mergeText,
   createProjectsEntry,
   createAdminEntry,
   findInboxLogByThreadTs,

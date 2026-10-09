@@ -73,6 +73,7 @@ src/
 **src/slack/handlers.js** - Message handlers for:
 - Capturing messages from `#secondbrain` channel
 - Categorizing with Claude AI (people/projects/admin, confidence > 0.6)
+- A capture classified as people whose name already exists updates that People record (merges context/follow-ups/tags; a Done person reopens to Backlog with context and follow-ups replaced) instead of creating a duplicate; the Inbox Log still gets a new row with the new Slack Thread TS
 - "fix:" replies for re-categorization
 - "update:" replies for status changes
 

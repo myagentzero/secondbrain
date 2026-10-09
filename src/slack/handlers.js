@@ -3,6 +3,8 @@ const { categorizeMessage, reclassifyMessage } = require('../claude/categorize')
 const {
   createInboxLogEntry,
   createPeopleEntry,
+  findPeopleByName,
+  updatePersonFromCapture,
   createProjectsEntry,
   createAdminEntry,
   findInboxLogByThreadTs,
@@ -30,6 +32,8 @@ const removeReaction = async (app, channel, timestamp, name) => {
   try {
     await app.client.reactions.remove({ channel, timestamp, name });
   } catch (error) {
+    // Nothing to remove is the expected case when the marker was never set
+    if (error.data?.error === 'no_reaction') return;
     console.log(`Could not remove :${name}: reaction:`, error.message);
   }
 };
@@ -94,6 +98,25 @@ const createDestinationEntry = async (destination, data) => {
   }
 };
 
+// File a classified item. A person who already exists is updated instead of duplicated.
+// Returns { destEntry, updatedExisting, reopened, status } where status is the record's resulting status.
+const fileToDestination = async (destination, data) => {
+  if (destination === 'people') {
+    const existing = await findPeopleByName(data.name);
+    if (existing) {
+      const { page, reopened } = await updatePersonFromCapture(existing, data);
+      return {
+        destEntry: page,
+        updatedExisting: true,
+        reopened,
+        status: reopened ? 'Backlog' : (existing.properties?.Status?.select?.name || data.status)
+      };
+    }
+  }
+  const destEntry = await createDestinationEntry(destination, data);
+  return { destEntry, updatedExisting: false, reopened: false, status: data.status };
+};
+
 const setupHandlers = () => {
   const app = getApp();
 
@@ -145,8 +168,8 @@ const setupHandlers = () => {
         return;
       }
 
-      // Create entry in destination database
-      const destEntry = await createDestinationEntry(result.destination, result);
+      const { destEntry, updatedExisting, reopened, status: finalStatus } =
+        await fileToDestination(result.destination, result);
 
       // Create inbox log entry
       await createInboxLogEntry({
@@ -156,15 +179,18 @@ const setupHandlers = () => {
         destinationUrl: destEntry ? destEntry.url : null,
         notionRecordId: destEntry ? destEntry.id : null,
         confidence: result.confidence,
-        status: result.status,
+        status: finalStatus,
         slackThreadTs: message.ts,
         filedTo: result.destination
       });
 
       // Reply with confirmation
       let replyText = `Filed as ${result.destination}\n\n*${result.name}*\nConfidence: ${result.confidence.toFixed(2)}`;
-      if (result.status) {
-        replyText += `\nStatus: ${result.status}`;
+      if (updatedExisting) {
+        replyText += '\nUpdated the existing person';
+      }
+      if (finalStatus) {
+        replyText += `\nStatus: ${finalStatus}${reopened ? ' (reopened from Done)' : ''}`;
       }
 
       await say({
@@ -230,7 +256,8 @@ const handleCorrection = async (message, say) => {
       const reclassified = await reclassifyMessage(originalText, parsed.newDestination, resolvedStatus || currentStatus || 'Backlog');
 
       // Create new entry in destination database
-      const destEntry = await createDestinationEntry(parsed.newDestination, reclassified);
+      const { destEntry, updatedExisting, reopened, status: filedStatus } =
+        await fileToDestination(parsed.newDestination, reclassified);
 
       // Update inbox log
       const inboxUpdates = {
@@ -239,13 +266,16 @@ const handleCorrection = async (message, say) => {
         destinationUrl: destEntry ? destEntry.url : null,
         notionRecordId: destEntry ? destEntry.id : null
       };
-      if (resolvedStatus) {
-        inboxUpdates.status = resolvedStatus;
+      // An existing person keeps (or reopens to) their own status; otherwise a resolved review becomes Backlog
+      const inboxStatus = updatedExisting ? filedStatus : resolvedStatus;
+      if (inboxStatus) {
+        inboxUpdates.status = inboxStatus;
       }
       await updateInboxLogEntry(inboxLogEntry.id, inboxUpdates);
 
-      // Archive the old destination entry last, so a failure above leaves it intact
-      if (notionRecordId) {
+      // Archive the old destination entry last, so a failure above leaves it intact.
+      // Skip it when it is the person we just updated.
+      if (notionRecordId && notionRecordId !== destEntry?.id) {
         try {
           await archivePage(notionRecordId);
         } catch (e) {
@@ -253,10 +283,11 @@ const handleCorrection = async (message, say) => {
         }
       }
 
+      const note = updatedExisting
+        ? ` (updated the existing person${reopened ? ', reopened from Done' : ''}; status ${filedStatus})`
+        : resolvedStatus ? ` (status set to ${resolvedStatus})` : '';
       await say({
-        text: resolvedStatus
-          ? `Destination updated to ${parsed.newDestination} (status set to ${resolvedStatus})`
-          : `Destination updated to ${parsed.newDestination}`,
+        text: `Destination updated to ${parsed.newDestination}${note}`,
         thread_ts: threadTs
       });
       return;

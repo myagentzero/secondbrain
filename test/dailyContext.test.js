@@ -46,3 +46,11 @@ test('events match on title and start instant, not title alone', () => {
   assert.ok(!isSameEvent(ev('Standup', '2026-10-05T16:00:00.000Z'), ev('Standup', '2026-10-06T16:00:00.000Z')));
   assert.ok(!isSameEvent(ev('Standup', '2026-10-05T16:00:00.000Z'), ev('Retro', '2026-10-05T16:00:00.000Z')));
 });
+
+test('mergeText puts new text first and skips repeats', () => {
+  const { mergeText } = require('../src/notion/databases');
+  assert.strictEqual(mergeText('', 'new'), 'new');
+  assert.strictEqual(mergeText('old', ''), 'old');
+  assert.strictEqual(mergeText('old', 'new'), 'new\nold');
+  assert.strictEqual(mergeText('new\nold', 'new'), 'new\nold');
+});
