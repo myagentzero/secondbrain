@@ -1,5 +1,8 @@
 const { getDatabaseIds, queryDatabase, createPage, updatePage } = require('./client');
 
+// Stamped on every Inbox Log row this app creates (the "Created by" column)
+const APP_NAME = require('../../package.json').name;
+
 const getMSTDate = () => {
   return new Date().toLocaleString('sv-SE', { timeZone: 'America/Phoenix' }).replace(' ', 'T');
 };
@@ -96,6 +99,7 @@ const createInboxLogEntry = async ({
     'Filed-To': { select: { name: filedTo || destination } },
     'Destination Name': { rich_text: rt(destinationName || '') },
     'Created': { date: { start: getMSTDate() } },
+    'Created by': { select: { name: APP_NAME } },
     'Slack Thread TS': { rich_text: rt(slackThreadTs || '') }
   };
 
@@ -548,6 +552,7 @@ const queryAllInboxLogRecordIds = async () => {
 };
 
 module.exports = {
+  APP_NAME,
   createInboxLogEntry,
   createPeopleEntry,
   findPeopleByName,

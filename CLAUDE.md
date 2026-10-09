@@ -126,7 +126,7 @@ The scheduler (node-cron) manages these tasks in America/Phoenix timezone:
 
 All databases have "Last Touched" date field and are linked from Inbox Log.
 
-- **Inbox Log**: Original Text, Filed-To, Destination Name, Confidence, Status, Slack Thread TS, Created
+- **Inbox Log**: Original Text, Filed-To, Destination Name, Confidence, Status, Slack Thread TS, Created, Created by
 - **People**: Name, Status (Backlog/Active/Needs Review/Done), Context, Follow-ups, Tags
 - **Projects**: Name, Status (Backlog/Active/Blocked/Done), Next Action, Notes, Tags
 - **Admin**: Name, Status (Backlog/Active/Done), Notes, Due Date, Created, Last Touched

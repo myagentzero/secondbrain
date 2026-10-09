@@ -223,6 +223,7 @@ The digest system integrates with Google Tasks to provide better context:
 - Status (select)
 - Slack Thread TS (text)
 - Created (date)
+- Created by (select, set to the app name: secondbrain)
 
 ### People
 - Name (title)
