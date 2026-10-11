@@ -41,8 +41,9 @@ const startScheduler = () => {
     timezone: 'America/Phoenix'
   });
 
-  // ...and again at noon and 4:00 PM, so items finished during the day close the same day
-  maintenanceAfternoonJob = cron.schedule('0 12,16 * * *', maintenanceTask, {
+  // ...and again at 12:05 PM and 4:05 PM on weekdays, so items finished during the day close the same day
+  // (offset 5 minutes to avoid starting alongside the calendar sync)
+  maintenanceAfternoonJob = cron.schedule('5 12,16 * * 1-5', maintenanceTask, {
     timezone: 'America/Phoenix'
   });
 
@@ -102,7 +103,7 @@ const startScheduler = () => {
   });
 
   console.log('Scheduler started:');
-  console.log('  - Daily maintenance: 4:30 AM, 12:00 PM, 4:00 PM (Every day)');
+  console.log('  - Daily maintenance: 4:30 AM (Every day), 12:05 PM and 4:05 PM (Mon-Fri)');
   console.log('  - Daily digest: 5:00 AM (Mon-Fri)');
   console.log('  - Weekly orphan cleanup + digest: Sunday 8:00 PM');
   console.log('  - Calendar sync: Weekdays 7am-3pm hourly (1 day ahead)');
