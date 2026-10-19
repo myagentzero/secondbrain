@@ -44,6 +44,23 @@ const downloadIcs = async (url) => {
 
 const COLOR_ID = 8;
 
+// Outlook puts the Teams join URL in the ICS DESCRIPTION (LOCATION is only the text "Microsoft Teams Meeting").
+// Two URL forms exist (/l/meetup-join/ and /meet/), and either may be wrapped by Outlook Safelinks.
+const URL_RE = /https?:\/\/[^\s<>"\\]+/g;
+const TEAMS_JOIN_RE = /^https:\/\/teams\.microsoft\.com\/(l\/meetup-join|meet)\//i;
+
+const unwrapSafelink = (url) => {
+  try {
+    const u = new URL(url);
+    return /\.safelinks\.protection\.outlook\.com$/i.test(u.hostname) ? (u.searchParams.get('url') || url) : url;
+  } catch {
+    return url;
+  }
+};
+
+const extractTeamsLink = (description) =>
+  (description || '').match(URL_RE)?.map(unwrapSafelink).find(url => TEAMS_JOIN_RE.test(url));
+
 // List every event in the range, following pagination (the API returns one page at a time)
 const listAllEvents = async (calendar, calendarId, startDateTime, endDateTime) => {
   const items = [];
@@ -114,14 +131,16 @@ const getUpcomingEvents = async (days) => {
     start: fixTimeZone(e.startDate),
     end: fixTimeZone(e.endDate),
     summary: e.summary,
-    location: e.location
+    location: e.location,
+    teamsLink: extractTeamsLink(e.description)
   }));
 
   const mappedOccurrences = events.occurrences.map(o => ({
     start: fixTimeZone(o.startDate),
     end: fixTimeZone(o.endDate),
     summary: o.item.summary,
-    location: o.item.location
+    location: o.item.location,
+    teamsLink: extractTeamsLink(o.item.description)
   }));
 
   const allEvents = [].concat(mappedEvents, mappedOccurrences, sharedCalEvents);
@@ -174,6 +193,7 @@ const runCalendarSync = async (syncDays) => {
     end: fixTimeZone(e.endDate),
     summary: e.summary,
     location: e.location,
+    teamsLink: extractTeamsLink(e.description),
     colorId: COLOR_ID
   }));
 
@@ -182,6 +202,7 @@ const runCalendarSync = async (syncDays) => {
     end: fixTimeZone(o.endDate),
     summary: o.item.summary,
     location: o.item.location,
+    teamsLink: extractTeamsLink(o.item.description),
     colorId: COLOR_ID
   }));
 
@@ -238,7 +259,24 @@ const runCalendarSync = async (syncDays) => {
   // Insert new events
   for (const event of uniqueEvents) {
     if ((config.skipEvents || []).filter(item => (event.summary || '').toLowerCase().includes(item.toLowerCase())).length) continue;
-    if (primaryEvents.some(pEvent => isSameEvent(pEvent, event))) continue;
+    const existing = primaryEvents.find(pEvent => isSameEvent(pEvent, event));
+    if (existing) {
+      // Backfill the Teams link on synced events created before link extraction existed
+      if (event.teamsLink && existing.colorId == COLOR_ID && !existing.description) {
+        try {
+          await calendar.events.patch({
+            calendarId: 'primary',
+            eventId: existing.id,
+            resource: { description: `Join Microsoft Teams meeting: ${event.teamsLink}` }
+          });
+          console.log('Event description updated');
+        } catch (err) {
+          console.log('The API returned an error: ' + err, existing.id);
+        }
+        await sleep(1500);
+      }
+      continue;
+    }
     if ((event.summary || '').startsWith('Canceled')) continue;
 
     const syncEvent = {
@@ -248,7 +286,8 @@ const runCalendarSync = async (syncDays) => {
         start: event.start,
         summary: event.summary,
         colorId: event.colorId,
-        location: event.location || config.location
+        location: event.location || config.location,
+        ...(event.teamsLink && { description: `Join Microsoft Teams meeting: ${event.teamsLink}` })
       }
     };
 
@@ -289,4 +328,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { runCalendarSync, getUpcomingEvents, isSameEvent };
+module.exports = { runCalendarSync, getUpcomingEvents, isSameEvent, extractTeamsLink };
