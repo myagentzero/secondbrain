@@ -61,6 +61,33 @@ const unwrapSafelink = (url) => {
 const extractTeamsLink = (description) =>
   (description || '').match(URL_RE)?.map(unwrapSafelink).find(url => TEAMS_JOIN_RE.test(url));
 
+const TEAMS_LINK_PREFIX = 'Join Microsoft Teams meeting: ';
+// Outlook's Teams block runs from a "Microsoft Teams meeting" / "Microsoft Teams Need help?" heading
+// (usually preceded by a divider line) through the dial-in details, organizer options and privacy footer
+const TEAMS_BLOCK_RE = /(?:^(?:_{60,}|-{4,})[ \t]*\n)?^Microsoft Teams (?:meeting|Need help\?)[\s\S]*?^(?:Phone conference ID|For organizers):.*(?:\n(?:For organi[sz]ers:.*|\[[^\]\n]*\]|Privacy and security.*|_{60,})[ \t]*)*/gm;
+const OUTLOOK_HEADER_RE = /^(From|When|Subject|Location):.*$/gm;
+const MAX_DESCRIPTION_LENGTH = 8000; // Google Calendar caps descriptions at ~8192 characters
+
+// The organizer's own text: the invite without the Teams join/dial-in block or Outlook header,
+// with Safelinks unwrapped.
+const extractDetails = (description) =>
+  (description || '')
+    .replace(TEAMS_BLOCK_RE, '')
+    .replace(OUTLOOK_HEADER_RE, '')
+    .replace(URL_RE, unwrapSafelink)
+    .replace(/[ \t]+$/gm, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+    .replace(/(?:\n[-_]{4,})+$/, ''); // dividers left dangling once the Teams block is gone
+
+// Teams link first, then any additional details from the Outlook invite
+const buildDescription = (description) => {
+  const link = extractTeamsLink(description);
+  const details = extractDetails(description);
+  const text = [link && TEAMS_LINK_PREFIX + link, details].filter(Boolean).join('\n\n');
+  return text.length > MAX_DESCRIPTION_LENGTH ? text.slice(0, MAX_DESCRIPTION_LENGTH) + '…' : text;
+};
+
 // List every event in the range, following pagination (the API returns one page at a time)
 const listAllEvents = async (calendar, calendarId, startDateTime, endDateTime) => {
   const items = [];
@@ -132,7 +159,8 @@ const getUpcomingEvents = async (days) => {
     end: fixTimeZone(e.endDate),
     summary: e.summary,
     location: e.location,
-    teamsLink: extractTeamsLink(e.description)
+    teamsLink: extractTeamsLink(e.description),
+    description: buildDescription(e.description)
   }));
 
   const mappedOccurrences = events.occurrences.map(o => ({
@@ -140,7 +168,8 @@ const getUpcomingEvents = async (days) => {
     end: fixTimeZone(o.endDate),
     summary: o.item.summary,
     location: o.item.location,
-    teamsLink: extractTeamsLink(o.item.description)
+    teamsLink: extractTeamsLink(o.item.description),
+    description: buildDescription(o.item.description)
   }));
 
   const allEvents = [].concat(mappedEvents, mappedOccurrences, sharedCalEvents);
@@ -194,6 +223,7 @@ const runCalendarSync = async (syncDays) => {
     summary: e.summary,
     location: e.location,
     teamsLink: extractTeamsLink(e.description),
+    description: buildDescription(e.description),
     colorId: COLOR_ID
   }));
 
@@ -203,6 +233,7 @@ const runCalendarSync = async (syncDays) => {
     summary: o.item.summary,
     location: o.item.location,
     teamsLink: extractTeamsLink(o.item.description),
+    description: buildDescription(o.item.description),
     colorId: COLOR_ID
   }));
 
@@ -259,24 +290,7 @@ const runCalendarSync = async (syncDays) => {
   // Insert new events
   for (const event of uniqueEvents) {
     if ((config.skipEvents || []).filter(item => (event.summary || '').toLowerCase().includes(item.toLowerCase())).length) continue;
-    const existing = primaryEvents.find(pEvent => isSameEvent(pEvent, event));
-    if (existing) {
-      // Backfill the Teams link on synced events created before link extraction existed
-      if (event.teamsLink && existing.colorId == COLOR_ID && !existing.description) {
-        try {
-          await calendar.events.patch({
-            calendarId: 'primary',
-            eventId: existing.id,
-            resource: { description: `Join Microsoft Teams meeting: ${event.teamsLink}` }
-          });
-          console.log('Event description updated');
-        } catch (err) {
-          console.log('The API returned an error: ' + err, existing.id);
-        }
-        await sleep(1500);
-      }
-      continue;
-    }
+    if (primaryEvents.some(pEvent => isSameEvent(pEvent, event))) continue;
     if ((event.summary || '').startsWith('Canceled')) continue;
 
     const syncEvent = {
@@ -287,7 +301,7 @@ const runCalendarSync = async (syncDays) => {
         summary: event.summary,
         colorId: event.colorId,
         location: event.location || config.location,
-        ...(event.teamsLink && { description: `Join Microsoft Teams meeting: ${event.teamsLink}` })
+        ...(event.description && { description: event.description })
       }
     };
 
@@ -328,4 +342,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { runCalendarSync, getUpcomingEvents, isSameEvent, extractTeamsLink };
+module.exports = { runCalendarSync, getUpcomingEvents, isSameEvent, extractTeamsLink, buildDescription };
