@@ -1,4 +1,5 @@
 const { google } = require('googleapis');
+const ICAL = require('ical.js');
 const IcalExpander = require('ical-expander');
 const { authorize } = require('./events');
 const { getCalendarConfig } = require('../config');
@@ -13,6 +14,17 @@ const fetchText = async (url, options) => {
   return fetch(url, options);
 };
 
+// Outlook uses Windows zone names (e.g. "India Standard Time") that ical.js doesn't know, so such events
+// parse as floating. A floating UNTIL comparison then drops valid final occurrences of a series.
+// Registering the feed's own VTIMEZONE definitions makes them resolve to real offsets.
+const registerFeedTimezones = (ics) => {
+  const root = new ICAL.Component(ICAL.parse(ics));
+  for (const vtimezone of root.getAllSubcomponents('vtimezone')) {
+    const tz = new ICAL.Timezone(vtimezone);
+    if (!ICAL.TimezoneService.has(tz.tzid)) ICAL.TimezoneService.register(tz.tzid, tz);
+  }
+};
+
 const getIcalEvents = (ics, startDateTime, endDateTime) => {
   const normalizedIcs = ics.trimStart();
   if (!normalizedIcs.startsWith('BEGIN:VCALENDAR') || !normalizedIcs.includes('END:VCALENDAR')) {
@@ -20,6 +32,7 @@ const getIcalEvents = (ics, startDateTime, endDateTime) => {
   }
 
   try {
+    registerFeedTimezones(normalizedIcs);
     const icalExpander = new IcalExpander({ ics: normalizedIcs, maxIterations: 100 });
     return icalExpander.between(startDateTime, endDateTime);
   } catch (err) {

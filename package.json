@@ -27,6 +27,7 @@
     "@slack/bolt": "^5.1.0",
     "googleapis": "^183.0.0",
     "ical-expander": "^3.2.0",
+    "ical.js": "^1.5.0",
     "node-cron": "^4.6.0",
     "node-fetch": "^3.3.2",
     "openai": "^7.28.0"
