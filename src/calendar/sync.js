@@ -25,6 +25,17 @@ const registerFeedTimezones = (ics) => {
   }
 };
 
+// ical.js files edited occurrences (RECURRENCE-ID) under each recurring event by local start time and
+// only checks the UID when strictExceptions is set, so an edit to one series replaces the same-time
+// occurrence of every other series. Keep only each event's own exceptions.
+const dropForeignExceptions = (expander) => {
+  for (const event of expander.events) {
+    for (const [id, exception] of Object.entries(event.exceptions)) {
+      if (exception.uid !== event.uid) delete event.exceptions[id];
+    }
+  }
+};
+
 const getIcalEvents = (ics, startDateTime, endDateTime) => {
   const normalizedIcs = ics.trimStart();
   if (!normalizedIcs.startsWith('BEGIN:VCALENDAR') || !normalizedIcs.includes('END:VCALENDAR')) {
@@ -34,6 +45,7 @@ const getIcalEvents = (ics, startDateTime, endDateTime) => {
   try {
     registerFeedTimezones(normalizedIcs);
     const icalExpander = new IcalExpander({ ics: normalizedIcs, maxIterations: 100 });
+    dropForeignExceptions(icalExpander);
     return { ...icalExpander.between(startDateTime, endDateTime), ruleIndex: buildRuleIndex(icalExpander) };
   } catch (err) {
     throw new Error(`Unable to parse ICS feed: ${err.message}`);
@@ -396,4 +408,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { runCalendarSync, getUpcomingEvents, listAllEvents, isSameEvent, extractTeamsLink, buildDescription };
+module.exports = { runCalendarSync, getIcalEvents, getUpcomingEvents, listAllEvents, isSameEvent, extractTeamsLink, buildDescription };
