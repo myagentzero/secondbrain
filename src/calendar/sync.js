@@ -34,7 +34,7 @@ const getIcalEvents = (ics, startDateTime, endDateTime) => {
   try {
     registerFeedTimezones(normalizedIcs);
     const icalExpander = new IcalExpander({ ics: normalizedIcs, maxIterations: 100 });
-    return icalExpander.between(startDateTime, endDateTime);
+    return { ...icalExpander.between(startDateTime, endDateTime), ruleIndex: buildRuleIndex(icalExpander) };
   } catch (err) {
     throw new Error(`Unable to parse ICS feed: ${err.message}`);
   }
@@ -93,24 +93,52 @@ const extractDetails = (description) =>
     .trim()
     .replace(/(?:\n[-_]{4,})+$/, ''); // dividers left dangling once the Teams block is gone
 
-// "Recurring · 12 invitees" from the ICS event (ical.js Event). Recurrence exceptions are edited
-// occurrences of a series, so they count as recurring too. Attendee count excludes the organizer.
-const buildMeta = (item) => {
-  if (!item) return '';
-  const recurring = item.isRecurring() || item.isRecurrenceException();
-  const invitees = item.attendees?.length || 0;
-  return [
-    recurring && 'Recurring',
-    invitees > 0 && `${invitees} invitee${invitees === 1 ? '' : 's'}`
-  ].filter(Boolean).join(' · ');
+const DAY_NAMES = { MO: 'Mon', TU: 'Tue', WE: 'Wed', TH: 'Thu', FR: 'Fri', SA: 'Sat', SU: 'Sun' };
+const ORDINALS = { '1': '1st', '2': '2nd', '3': '3rd', '4': '4th', '5': '5th', '-1': 'last' };
+const UNITS = { DAILY: 'day', WEEKLY: 'week', MONTHLY: 'month', YEARLY: 'year' };
+
+// "every week on Mon", "every 2 weeks on Tue, Thu", "every weekday", "every month on the 3rd Mon"
+const describeRule = (rule) => {
+  const { freq, interval = 1, parts } = rule;
+  const days = (parts.BYDAY || []).map(d => {
+    const [, ordinal, day] = String(d).match(/^([+-]?\d+)?([A-Z]{2})$/) || [];
+    return { ordinal: ordinal && ORDINALS[String(parseInt(ordinal))], name: DAY_NAMES[day] };
+  }).filter(d => d.name);
+
+  if (freq === 'WEEKLY' && interval === 1 && days.length === 5 && !days.some(d => ['Sat', 'Sun'].includes(d.name))) {
+    return 'every weekday';
+  }
+  if (!UNITS[freq]) return '';
+  const base = interval === 1 ? `every ${UNITS[freq]}` : `every ${interval} ${UNITS[freq]}s`;
+  if (!days.length) return base;
+  if (freq === 'MONTHLY' && days[0].ordinal) return `${base} on the ${days[0].ordinal} ${days[0].name}`;
+  return `${base} on ${days.map(d => d.name).join(', ')}`;
 };
 
-// Teams link, then meta line, then any additional details from the Outlook invite
-const buildDescription = (description, item) => {
+// Edited occurrences (RECURRENCE-ID) carry no RRULE, so the pattern comes from the series' master event
+const buildRuleIndex = (expander) => {
+  const index = new Map();
+  for (const event of expander.events) {
+    const rule = event.component.getFirstPropertyValue('rrule');
+    if (rule) index.set(event.uid, describeRule(rule));
+  }
+  return index;
+};
+
+// "Occurs every week on Mon" from the ICS event (ical.js Event). Recurrence exceptions are edited
+// occurrences of a series, so they count as recurring too.
+const buildRecurrence = (item, ruleIndex) => {
+  if (!item || !(item.isRecurring() || item.isRecurrenceException())) return '';
+  const pattern = ruleIndex?.get(item.uid);
+  return pattern ? `Occurs ${pattern}` : 'Occurs as part of a recurring series';
+};
+
+// Teams link, then recurrence line, then any additional details from the Outlook invite
+const buildDescription = (description, item, ruleIndex) => {
   const link = extractTeamsLink(description);
   const details = extractDetails(description);
-  const meta = buildMeta(item);
-  const text = [link && TEAMS_LINK_PREFIX + link, meta, details].filter(Boolean).join('\n\n');
+  const recurrence = buildRecurrence(item, ruleIndex);
+  const text = [link && TEAMS_LINK_PREFIX + link, recurrence, details].filter(Boolean).join('\n\n');
   return text.length > MAX_DESCRIPTION_LENGTH ? text.slice(0, MAX_DESCRIPTION_LENGTH) + '…' : text;
 };
 
@@ -186,7 +214,7 @@ const getUpcomingEvents = async (days) => {
     summary: e.summary,
     location: e.location,
     teamsLink: extractTeamsLink(e.description),
-    description: buildDescription(e.description, e)
+    description: buildDescription(e.description, e, events.ruleIndex)
   }));
 
   const mappedOccurrences = events.occurrences.map(o => ({
@@ -195,7 +223,7 @@ const getUpcomingEvents = async (days) => {
     summary: o.item.summary,
     location: o.item.location,
     teamsLink: extractTeamsLink(o.item.description),
-    description: buildDescription(o.item.description, o.item)
+    description: buildDescription(o.item.description, o.item, events.ruleIndex)
   }));
 
   const allEvents = [].concat(mappedEvents, mappedOccurrences, sharedCalEvents);
@@ -249,7 +277,7 @@ const runCalendarSync = async (syncDays) => {
     summary: e.summary,
     location: e.location,
     teamsLink: extractTeamsLink(e.description),
-    description: buildDescription(e.description, e),
+    description: buildDescription(e.description, e, events.ruleIndex),
     colorId: COLOR_ID
   }));
 
@@ -259,7 +287,7 @@ const runCalendarSync = async (syncDays) => {
     summary: o.item.summary,
     location: o.item.location,
     teamsLink: extractTeamsLink(o.item.description),
-    description: buildDescription(o.item.description, o.item),
+    description: buildDescription(o.item.description, o.item, events.ruleIndex),
     colorId: COLOR_ID
   }));
 
@@ -368,4 +396,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { runCalendarSync, getUpcomingEvents, isSameEvent, extractTeamsLink, buildDescription };
+module.exports = { runCalendarSync, getUpcomingEvents, listAllEvents, isSameEvent, extractTeamsLink, buildDescription };
