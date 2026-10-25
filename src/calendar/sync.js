@@ -93,11 +93,24 @@ const extractDetails = (description) =>
     .trim()
     .replace(/(?:\n[-_]{4,})+$/, ''); // dividers left dangling once the Teams block is gone
 
-// Teams link first, then any additional details from the Outlook invite
-const buildDescription = (description) => {
+// "Recurring · 12 invitees" from the ICS event (ical.js Event). Recurrence exceptions are edited
+// occurrences of a series, so they count as recurring too. Attendee count excludes the organizer.
+const buildMeta = (item) => {
+  if (!item) return '';
+  const recurring = item.isRecurring() || item.isRecurrenceException();
+  const invitees = item.attendees?.length || 0;
+  return [
+    recurring && 'Recurring',
+    invitees > 0 && `${invitees} invitee${invitees === 1 ? '' : 's'}`
+  ].filter(Boolean).join(' · ');
+};
+
+// Teams link, then meta line, then any additional details from the Outlook invite
+const buildDescription = (description, item) => {
   const link = extractTeamsLink(description);
   const details = extractDetails(description);
-  const text = [link && TEAMS_LINK_PREFIX + link, details].filter(Boolean).join('\n\n');
+  const meta = buildMeta(item);
+  const text = [link && TEAMS_LINK_PREFIX + link, meta, details].filter(Boolean).join('\n\n');
   return text.length > MAX_DESCRIPTION_LENGTH ? text.slice(0, MAX_DESCRIPTION_LENGTH) + '…' : text;
 };
 
@@ -173,7 +186,7 @@ const getUpcomingEvents = async (days) => {
     summary: e.summary,
     location: e.location,
     teamsLink: extractTeamsLink(e.description),
-    description: buildDescription(e.description)
+    description: buildDescription(e.description, e)
   }));
 
   const mappedOccurrences = events.occurrences.map(o => ({
@@ -182,7 +195,7 @@ const getUpcomingEvents = async (days) => {
     summary: o.item.summary,
     location: o.item.location,
     teamsLink: extractTeamsLink(o.item.description),
-    description: buildDescription(o.item.description)
+    description: buildDescription(o.item.description, o.item)
   }));
 
   const allEvents = [].concat(mappedEvents, mappedOccurrences, sharedCalEvents);
@@ -236,7 +249,7 @@ const runCalendarSync = async (syncDays) => {
     summary: e.summary,
     location: e.location,
     teamsLink: extractTeamsLink(e.description),
-    description: buildDescription(e.description),
+    description: buildDescription(e.description, e),
     colorId: COLOR_ID
   }));
 
@@ -246,7 +259,7 @@ const runCalendarSync = async (syncDays) => {
     summary: o.item.summary,
     location: o.item.location,
     teamsLink: extractTeamsLink(o.item.description),
-    description: buildDescription(o.item.description),
+    description: buildDescription(o.item.description, o.item),
     colorId: COLOR_ID
   }));
 
