@@ -78,8 +78,8 @@ const startScheduler = () => {
     timezone: 'America/Phoenix'
   });
 
-  // Calendar sync: Mon-Thu 4pm, 2 days ahead
-  calSyncMonThuJob = cron.schedule('0 16 * * 1-4', async () => {
+  // Calendar sync: Mon-Thu 4pm-6pm hourly, 2 days ahead
+  calSyncMonThuJob = cron.schedule('0 16-18 * * 1-4', async () => {
     console.log('Running scheduled calendar sync (2 days)...');
     try {
       await runCalendarSync(2);
@@ -107,7 +107,7 @@ const startScheduler = () => {
   console.log('  - Daily digest: 5:00 AM (Mon-Fri)');
   console.log('  - Weekly orphan cleanup + digest: Sunday 8:00 PM');
   console.log('  - Calendar sync: Weekdays 7am-3pm hourly (1 day ahead)');
-  console.log('  - Calendar sync: Mon-Thu 4pm (2 days ahead)');
+  console.log('  - Calendar sync: Mon-Thu 4pm-6pm hourly (2 days ahead)');
   console.log('  - Calendar sync: Friday 4pm (4 days ahead)');
 };
 

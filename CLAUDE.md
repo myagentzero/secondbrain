@@ -119,7 +119,7 @@ The scheduler (node-cron) manages these tasks in America/Phoenix timezone:
 - **5:00 AM (Mon-Fri)**: Daily digest generation
 - **8:00 PM (Sundays)**: Weekly orphan cleanup + weekly digest generation
 - **7am-3pm (weekdays, hourly)**: Calendar sync (1 day ahead)
-- **4pm (Mon-Thu)**: Calendar sync (2 days ahead)
+- **4pm, 5pm, 6pm (Mon-Thu)**: Calendar sync (2 days ahead)
 - **4pm (Fridays)**: Calendar sync (4 days ahead, covers weekend)
 
 ## Notion Database Schema
